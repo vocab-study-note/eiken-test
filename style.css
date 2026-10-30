@@ -19,3 +19,5 @@ header{padding:22px 16px}h1{font-size:23px;line-height:1.4}main{padding:16px 10p
 .question-only #answer-wrap,.answer-only #question-wrap{display:none!important}
 .question-only #question-wrap{break-after:auto}.blank{min-height:20px}
 }
+
+.weak-row{display:flex;flex-direction:row;align-items:center;gap:8px;font-size:12px;margin:8px 0;font-weight:normal}.weak-row input{margin:0}#weak-list{max-height:300px;overflow:auto}
