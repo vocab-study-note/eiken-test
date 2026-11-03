@@ -29,9 +29,9 @@ function applyReviewList(data, reviews) {
 
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let data,questions=[],meta='',hidden=false;const key='eiken-study-v1';
-function applySaved(saved){if(!saved||!Array.isArray(saved.words)||!Array.isArray(saved.entries))throw Error('バックアップ形式が不正です');const words=new Map(data.words.map(w=>[w.id,w])),entries=new Map(data.entries.map(e=>[e.number,e]));for(const w of saved.words)if(!words.has(w.id)||words.get(w.id).word!==w.word||!(w.meaning_ja===null||typeof w.meaning_ja==='string'))throw Error('単語データが一致しません');for(const e of saved.entries)if(!entries.has(e.number)||!['unassessed','needs_review','confirmed'].includes(e.review_status))throw Error('確認情報が不正です');for(const w of saved.words){words.get(w.id).meaning_ja=w.meaning_ja;words.get(w.id).weak=w.weak===true;}for(const e of saved.entries)entries.get(e.number).review_status=e.review_status;}
+function applySaved(saved){if(!saved||!Array.isArray(saved.words)||!Array.isArray(saved.entries))throw Error('バックアップ形式が不正です');const words=new Map(data.words.map(w=>[w.id,w])),entries=new Map(data.entries.map(e=>[e.number,e]));for(const w of saved.words)if(!words.has(w.id)||words.get(w.id).word!==w.word||!(w.meaning_ja===null||typeof w.meaning_ja==='string'))throw Error('単語データが一致しません');for(const e of saved.entries)if(!entries.has(e.number)||!['unassessed','needs_review','confirmed'].includes(e.review_status))throw Error('確認情報が不正です');for(const w of saved.words){if(w.meaning_user_edited===true || (typeof w.meaning_ja==='string' && w.meaning_ja.trim())){words.get(w.id).meaning_ja=w.meaning_ja;words.get(w.id).meaning_user_edited=w.meaning_user_edited===true || !w.meaning_source;}words.get(w.id).weak=w.weak===true;}for(const e of saved.entries)if(e.review_status!=='unassessed')entries.get(e.number).review_status=e.review_status;}
 function save(){try{localStorage.setItem(key,JSON.stringify(data));$('save-status').textContent='このブラウザーに保存しました。';}catch{$('save-status').textContent='ブラウザーに保存できません。バックアップ保存をご利用ください。';}}
-function render(){for(const answer of [false,true]){const title=answer?'英単語テスト・解答':'英単語テスト';$(answer?'answers':'questions').innerHTML=`<h2>${title}</h2><div class="meta"><span>${esc(meta)}</span><span>${new Date().toLocaleDateString('ja-JP')}</span></div>${answer?'':'<div class="name">氏名 ____________________　得点 ____ / '+questions.length+'</div>'}<table><thead><tr><th>No.</th><th>英単語</th><th>日本語の意味</th></tr></thead><tbody>${questions.map((q,i)=>{const w=data.words.find(w=>w.id===q.word_id);return `<tr><td>${i+1}</td><td>${esc(w.word)} <span class="num">${q.number}${q.review_status==='needs_review'?' ⚑':''}</span>${answer?'':`<label class="weak-row no-print"><input type="checkbox" data-weak="${w.id}" ${w.weak?'checked':''}>間違えた</label>`}</td><td>${answer?`<span class="answer">${esc(w.meaning_ja||'訳未登録')}</span>`:`<input class="blank" aria-label="問${i+1}の解答">`}</td></tr>`}).join('')}</tbody></table><p class="footer">範囲内で同一単語の重複なし${answer?' ・ 訳は単語データ管理で追加できます。':''}</p>`;}}
+function render(){for(const answer of [false,true]){const title=answer?'英単語テスト・解答':'英単語テスト';$(answer?'answers':'questions').innerHTML=`<h2>${title}</h2><div class="meta"><span>${esc(meta)}</span><span>${new Date().toLocaleDateString('ja-JP')}</span></div>${answer?'':'<div class="name">氏名 ____________________　得点 ____ / '+questions.length+'</div>'}<table><thead><tr><th>No.</th><th>英単語</th><th>日本語の意味</th></tr></thead><tbody>${questions.map((q,i)=>{const w=data.words.find(w=>w.id===q.word_id);return `<tr><td>${i+1}</td><td>${esc(w.word)} <span class="num">${q.number}${q.review_status==='needs_review'?' ⚑':''}</span>${answer?'':`<label class="weak-row no-print"><input type="checkbox" data-weak="${w.id}" ${w.weak?'checked':''}>間違えた</label>`}</td><td>${answer?`<span class="answer">${esc(w.meaning_ja||(w.meaning_source==='pending_spelling_review'?'要確認：綴りを確認してください':'訳未登録'))}</span>`:`<input class="blank" aria-label="問${i+1}の解答">`}</td></tr>`}).join('')}</tbody></table><p class="footer">範囲内で同一単語の重複なし${answer?' ・ 一般的な意味に基づく学習用訳（教材の掲載訳とは異なります）。':''}</p>`;}}
 function weakUI(){const weak=data.words.filter(w=>w.weak);$('weak-count').textContent=`保存した苦手単語：${weak.length}語`;$('weak-list').innerHTML=weak.length?weak.map(w=>`<label class="weak-row"><input type="checkbox" data-weak="${w.id}" checked>${esc(w.word)} <span class="muted">${data.entries.filter(e=>e.word_id===w.id).map(e=>e.number).join(' / ')}番</span></label>`).join(''):'まだありません。問題の「間違えた」にチェックしてください。';}
 function generate(){try{const isWeak=$('mode').value==='weak',start=isWeak?1:+$('start').value,end=isWeak?2400:+$('end').value,count=+$('count').value;let source=data,actual=count;if(isWeak){const ids=new Set(data.words.filter(w=>w.weak).map(w=>w.id));source={...data,entries:data.entries.filter(e=>ids.has(e.word_id))};const eligible=source.entries.filter(e=>!$('exclude').checked||e.review_status!=='needs_review');actual=Math.min(count,new Set(eligible.map(e=>e.word_id)).size);if(!actual)throw Error('出題できる苦手単語がありません。問題にチェックを付けるか、OCR除外設定を確認してください。');}questions=createQuiz(source,{start,end,count:actual,order:$('order').value,excludeReview:$('exclude').checked});meta=`${isWeak?'苦手単語（全範囲）':`範囲 ${start}〜${end}`} / ${actual}問 / ${$('order').selectedOptions[0].text}`;render();weakUI();$('status').textContent=`${isWeak?'保存した苦手単語':`${start}〜${end}番`}から ${actual}問を生成しました。${actual<count?'（保存数に合わせて出題）':''}`;$('error').textContent='';}catch(e){$('error').textContent=e.message;}}
 $('mode').onchange=()=>{for(const id of ['range','start','end'])$(id).disabled=$('mode').value==='weak';};
@@ -40,7 +40,7 @@ function manager(){const r=ranges[+$('manage-range').value];const words=new Map(
 $('form').onsubmit=e=>{e.preventDefault();generate();};$('range').onchange=()=>{const r=ranges[+$('range').value];$('start').value=r.start;$('end').value=r.end;};
 $('toggle').onclick=()=>{hidden=!hidden;$('answer-wrap').hidden=hidden;$('toggle').textContent=hidden?'解答を表示':'解答を隠す';};
 document.querySelectorAll('[data-print]').forEach(b=>b.onclick=()=>{document.body.className=b.dataset.print;$('answer-wrap').hidden=false;window.print();$('answer-wrap').hidden=hidden;document.body.className='';});
-$('manage-range').onchange=manager;$('manager').onchange=e=>{if(e.target.dataset.word)data.words.find(w=>w.id===+e.target.dataset.word).meaning_ja=e.target.value||null;if(e.target.dataset.entry)data.entries.find(x=>x.number===+e.target.dataset.entry).review_status=e.target.value;save();render();};
+$('manage-range').onchange=manager;$('manager').onchange=e=>{if(e.target.dataset.word){const w=data.words.find(w=>w.id===+e.target.dataset.word);w.meaning_ja=e.target.value||null;w.meaning_user_edited=true;}if(e.target.dataset.entry)data.entries.find(x=>x.number===+e.target.dataset.entry).review_status=e.target.value;save();render();};
 $('backup').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='eiken-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
 $('restore').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;applySaved(JSON.parse(await f.text()));save();manager();render();weakUI();}catch(err){$('save-status').textContent=err.message;}e.target.value='';};
 try{data={
@@ -51,11997 +51,16878 @@ try{data={
     {
       "id": 1,
       "word": "squander",
-      "meaning_ja": null
+      "meaning_ja": "浪費する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2,
       "word": "berate",
-      "meaning_ja": null
+      "meaning_ja": "厳しく叱る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 3,
       "word": "extol",
-      "meaning_ja": null
+      "meaning_ja": "激賞する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 4,
       "word": "petrify",
-      "meaning_ja": null
+      "meaning_ja": "恐怖で動けなくする；石化させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 5,
       "word": "mesmerize",
-      "meaning_ja": null
+      "meaning_ja": "魅了する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 6,
       "word": "appall",
-      "meaning_ja": null
+      "meaning_ja": "ぞっとさせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 7,
       "word": "quell",
-      "meaning_ja": null
+      "meaning_ja": "鎮める；抑える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 8,
       "word": "fluctuate",
-      "meaning_ja": null
+      "meaning_ja": "変動する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 9,
       "word": "allay",
-      "meaning_ja": null
+      "meaning_ja": "和らげる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 10,
       "word": "ransack",
-      "meaning_ja": null
+      "meaning_ja": "くまなく探して荒らす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 11,
       "word": "embellish",
-      "meaning_ja": null
+      "meaning_ja": "飾る；話を脚色する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 12,
       "word": "stifle",
-      "meaning_ja": null
+      "meaning_ja": "抑え込む；窒息させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 13,
       "word": "curtail",
-      "meaning_ja": null
+      "meaning_ja": "削減する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 14,
       "word": "capitulate",
-      "meaning_ja": null
+      "meaning_ja": "降伏する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 15,
       "word": "epitomize",
-      "meaning_ja": null
+      "meaning_ja": "典型である；要約する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 16,
       "word": "denote",
-      "meaning_ja": null
+      "meaning_ja": "示す；意味する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 17,
       "word": "rebuff",
-      "meaning_ja": null
+      "meaning_ja": "拒絶する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 18,
       "word": "admonish",
-      "meaning_ja": null
+      "meaning_ja": "忠告する；叱る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 19,
       "word": "recuperate",
-      "meaning_ja": null
+      "meaning_ja": "回復する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 20,
       "word": "alienate",
-      "meaning_ja": null
+      "meaning_ja": "疎外する；遠ざける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 21,
       "word": "ostracize",
-      "meaning_ja": null
+      "meaning_ja": "仲間外れにする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 22,
       "word": "disseminate",
-      "meaning_ja": null
+      "meaning_ja": "広める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 23,
       "word": "huddle",
-      "meaning_ja": null
+      "meaning_ja": "身を寄せ合う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 24,
       "word": "exonerate",
-      "meaning_ja": null
+      "meaning_ja": "無罪を証明する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 25,
       "word": "entice",
-      "meaning_ja": null
+      "meaning_ja": "誘い込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 26,
       "word": "contrive",
-      "meaning_ja": null
+      "meaning_ja": "工夫して作る；企む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 27,
       "word": "chisel",
-      "meaning_ja": null
+      "meaning_ja": "のみで彫る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 28,
       "word": "wane",
-      "meaning_ja": null
+      "meaning_ja": "衰える；欠ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 29,
       "word": "circumvent",
-      "meaning_ja": null
+      "meaning_ja": "回避する；迂回する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 30,
       "word": "disperse",
-      "meaning_ja": null
+      "meaning_ja": "散らす；分散する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 31,
       "word": "revamp",
-      "meaning_ja": null
+      "meaning_ja": "刷新する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 32,
       "word": "debunk",
-      "meaning_ja": null
+      "meaning_ja": "誤りを暴く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 33,
       "word": "defuse",
-      "meaning_ja": null
+      "meaning_ja": "緊張を和らげる；信管を外す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 34,
       "word": "indoctrinate",
-      "meaning_ja": null
+      "meaning_ja": "思想を教え込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 35,
       "word": "feign",
-      "meaning_ja": null
+      "meaning_ja": "ふりをする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 36,
       "word": "rout",
-      "meaning_ja": null
+      "meaning_ja": "完敗させる；総崩れ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 37,
       "word": "incision",
-      "meaning_ja": null
+      "meaning_ja": "切開；切り込み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 38,
       "word": "rift",
-      "meaning_ja": null
+      "meaning_ja": "亀裂；不和",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 39,
       "word": "feat",
-      "meaning_ja": null
+      "meaning_ja": "偉業；離れ業",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 40,
       "word": "predicament",
-      "meaning_ja": null
+      "meaning_ja": "苦境",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 41,
       "word": "eulogy",
-      "meaning_ja": null
+      "meaning_ja": "追悼演説；賛辞",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 42,
       "word": "latitude",
-      "meaning_ja": null
+      "meaning_ja": "緯度；裁量の幅",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 43,
       "word": "asylum",
-      "meaning_ja": null
+      "meaning_ja": "避難所；亡命による保護",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 44,
       "word": "hindsight",
-      "meaning_ja": null
+      "meaning_ja": "後知恵",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 45,
       "word": "prognosis",
-      "meaning_ja": null
+      "meaning_ja": "予後；予測",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 46,
       "word": "offshoot",
-      "meaning_ja": null
+      "meaning_ja": "分派；派生物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 47,
       "word": "glut",
-      "meaning_ja": null
+      "meaning_ja": "供給過剰",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 48,
       "word": "versatility",
-      "meaning_ja": null
+      "meaning_ja": "多才さ；多用途性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 49,
       "word": "attire",
-      "meaning_ja": null
+      "meaning_ja": "服装",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 50,
       "word": "pinnacle",
-      "meaning_ja": null
+      "meaning_ja": "頂点",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 51,
       "word": "respite",
-      "meaning_ja": null
+      "meaning_ja": "一時的な休息",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 52,
       "word": "zenith",
-      "meaning_ja": null
+      "meaning_ja": "絶頂；天頂",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 53,
       "word": "annotation",
-      "meaning_ja": null
+      "meaning_ja": "注釈",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 54,
       "word": "cessation",
-      "meaning_ja": null
+      "meaning_ja": "停止；中止",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 55,
       "word": "mayhem",
-      "meaning_ja": null
+      "meaning_ja": "大混乱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 56,
       "word": "propensity",
-      "meaning_ja": null
+      "meaning_ja": "傾向；性癖",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 57,
       "word": "clamor",
-      "meaning_ja": null
+      "meaning_ja": "騒ぎ；大声で要求する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 58,
       "word": "aversion",
-      "meaning_ja": null
+      "meaning_ja": "嫌悪",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 59,
       "word": "figment",
-      "meaning_ja": null
+      "meaning_ja": "想像の産物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 60,
       "word": "bout",
-      "meaning_ja": null
+      "meaning_ja": "一時的な発作；試合",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 61,
       "word": "embargo",
-      "meaning_ja": null
+      "meaning_ja": "禁輸",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 62,
       "word": "barrage",
-      "meaning_ja": null
+      "meaning_ja": "集中砲火；質問などの殺到",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 63,
       "word": "remorse",
-      "meaning_ja": null
+      "meaning_ja": "後悔；良心の呵責",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 64,
       "word": "affront",
-      "meaning_ja": null
+      "meaning_ja": "侮辱；侮辱する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 65,
       "word": "exodus",
-      "meaning_ja": null
+      "meaning_ja": "大量脱出",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 66,
       "word": "adept",
-      "meaning_ja": null
+      "meaning_ja": "熟練した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 67,
       "word": "pristine",
-      "meaning_ja": null
+      "meaning_ja": "汚れていない；原始のままの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 68,
       "word": "lucrative",
-      "meaning_ja": null
+      "meaning_ja": "利益の大きい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 69,
       "word": "meticulous",
-      "meaning_ja": null
+      "meaning_ja": "細部まで注意深い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 70,
       "word": "flimsy",
-      "meaning_ja": null
+      "meaning_ja": "薄っぺらな；根拠の弱い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 71,
       "word": "detrimental",
-      "meaning_ja": null
+      "meaning_ja": "有害な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 72,
       "word": "adroit",
-      "meaning_ja": null
+      "meaning_ja": "器用な；巧みな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 73,
       "word": "contentious",
-      "meaning_ja": null
+      "meaning_ja": "論争を招く；議論好きの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 74,
       "word": "insurmountable",
-      "meaning_ja": null
+      "meaning_ja": "克服できない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 75,
       "word": "adamant",
-      "meaning_ja": null
+      "meaning_ja": "断固とした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 76,
       "word": "avid",
-      "meaning_ja": null
+      "meaning_ja": "熱心な；貪欲な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 77,
       "word": "marginal",
-      "meaning_ja": null
+      "meaning_ja": "わずかな；周辺の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 78,
       "word": "defunct",
-      "meaning_ja": null
+      "meaning_ja": "もはや存在しない；廃止された",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 79,
       "word": "sporadic",
-      "meaning_ja": null
+      "meaning_ja": "散発的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 80,
       "word": "frivolous",
-      "meaning_ja": null
+      "meaning_ja": "軽薄な；取るに足らない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 81,
       "word": "lethargic",
-      "meaning_ja": null
+      "meaning_ja": "無気力な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 82,
       "word": "caustic",
-      "meaning_ja": null
+      "meaning_ja": "辛辣な；腐食性の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 83,
       "word": "sedentary",
-      "meaning_ja": null
+      "meaning_ja": "座りがちな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 84,
       "word": "pallid",
-      "meaning_ja": null
+      "meaning_ja": "青白い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 85,
       "word": "salient",
-      "meaning_ja": null
+      "meaning_ja": "際立った；重要な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 86,
       "word": "tenacious",
-      "meaning_ja": null
+      "meaning_ja": "粘り強い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 87,
       "word": "immaculate",
-      "meaning_ja": null
+      "meaning_ja": "汚れのない；非の打ち所のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 88,
       "word": "uncouth",
-      "meaning_ja": null
+      "meaning_ja": "無作法な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 89,
       "word": "gregarious",
-      "meaning_ja": null
+      "meaning_ja": "社交的な；群居性の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 90,
       "word": "emaciated",
-      "meaning_ja": null
+      "meaning_ja": "やせ衰えた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 91,
       "word": "lavish",
-      "meaning_ja": null
+      "meaning_ja": "豪華な；惜しみなく与える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 92,
       "word": "mediocre",
-      "meaning_ja": null
+      "meaning_ja": "平凡な；並以下の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 93,
       "word": "arbitrary",
-      "meaning_ja": null
+      "meaning_ja": "恣意的な；独断的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 94,
       "word": "benign",
-      "meaning_ja": null
+      "meaning_ja": "温和な；良性の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 95,
       "word": "facetious",
-      "meaning_ja": null
+      "meaning_ja": "ふざけた；不真面目な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 96,
       "word": "demure",
-      "meaning_ja": null
+      "meaning_ja": "控えめな；慎み深い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 97,
       "word": "inscrutable",
-      "meaning_ja": null
+      "meaning_ja": "不可解な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 98,
       "word": "precarious",
-      "meaning_ja": null
+      "meaning_ja": "不安定な；危険な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 99,
       "word": "hereditary",
-      "meaning_ja": null
+      "meaning_ja": "遺伝性の；世襲の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 100,
       "word": "blatantly",
-      "meaning_ja": null
+      "meaning_ja": "露骨に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 101,
       "word": "lambaste",
-      "meaning_ja": null
+      "meaning_ja": "こっぴどく批判する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 102,
       "word": "renege",
-      "meaning_ja": null
+      "meaning_ja": "約束を破る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 103,
       "word": "dwindle",
-      "meaning_ja": null
+      "meaning_ja": "次第に減少する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 104,
       "word": "reprimand",
-      "meaning_ja": null
+      "meaning_ja": "叱責する；叱責",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 105,
       "word": "inculcate",
-      "meaning_ja": null
+      "meaning_ja": "教え込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 106,
       "word": "refute",
-      "meaning_ja": null
+      "meaning_ja": "反論する；誤りを証明する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 107,
       "word": "corroborate",
-      "meaning_ja": null
+      "meaning_ja": "裏付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 108,
       "word": "secede",
-      "meaning_ja": null
+      "meaning_ja": "脱退する；分離独立する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 109,
       "word": "plummet",
-      "meaning_ja": null
+      "meaning_ja": "急落する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 110,
       "word": "veer",
-      "meaning_ja": null
+      "meaning_ja": "急に方向を変える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 111,
       "word": "delude",
-      "meaning_ja": null
+      "meaning_ja": "欺く；思い違いをさせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 112,
       "word": "divulge",
-      "meaning_ja": null
+      "meaning_ja": "秘密を漏らす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 113,
       "word": "commiserate",
-      "meaning_ja": null
+      "meaning_ja": "同情する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 114,
       "word": "flout",
-      "meaning_ja": null
+      "meaning_ja": "公然と無視する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 115,
       "word": "besiege",
-      "meaning_ja": null
+      "meaning_ja": "包囲する；殺到する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 116,
       "word": "override",
-      "meaning_ja": null
+      "meaning_ja": "覆す；優先する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 117,
       "word": "succumb",
-      "meaning_ja": null
+      "meaning_ja": "屈する；病気で死ぬ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 118,
       "word": "plague",
-      "meaning_ja": null
+      "meaning_ja": "苦しめる；疫病",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 119,
       "word": "eclipse",
-      "meaning_ja": null
+      "meaning_ja": "覆い隠す；しのぐ；食",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 120,
       "word": "lurk",
-      "meaning_ja": null
+      "meaning_ja": "潜む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 121,
       "word": "incur",
-      "meaning_ja": null
+      "meaning_ja": "損失などを被る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 122,
       "word": "bask",
-      "meaning_ja": null
+      "meaning_ja": "日光などを浴びる；恩恵に浸る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 123,
       "word": "tout",
-      "meaning_ja": null
+      "meaning_ja": "盛んに宣伝する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 124,
       "word": "encrypt",
-      "meaning_ja": null
+      "meaning_ja": "暗号化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 125,
       "word": "pique",
-      "meaning_ja": null
+      "meaning_ja": "興味をかき立てる；腹を立てること",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 126,
       "word": "meddle",
-      "meaning_ja": null
+      "meaning_ja": "干渉する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 127,
       "word": "plunder",
-      "meaning_ja": null
+      "meaning_ja": "略奪する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 128,
       "word": "broach",
-      "meaning_ja": null
+      "meaning_ja": "話題を切り出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 129,
       "word": "embezzle",
-      "meaning_ja": null
+      "meaning_ja": "横領する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 130,
       "word": "rebut",
-      "meaning_ja": null
+      "meaning_ja": "反駁する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 131,
       "word": "liquidate",
-      "meaning_ja": null
+      "meaning_ja": "清算する；換金する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 132,
       "word": "frisk",
-      "meaning_ja": null
+      "meaning_ja": "身体検査をする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 133,
       "word": "budge",
-      "meaning_ja": null
+      "meaning_ja": "少し動く；譲歩する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 134,
       "word": "recoup",
-      "meaning_ja": null
+      "meaning_ja": "取り戻す；損失を埋め合わせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 135,
       "word": "allude",
-      "meaning_ja": null
+      "meaning_ja": "それとなく言及する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 136,
       "word": "nudge",
-      "meaning_ja": null
+      "meaning_ja": "軽く突く；そっと促す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 137,
       "word": "garner",
-      "meaning_ja": null
+      "meaning_ja": "集める；獲得する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 138,
       "word": "burgeon",
-      "meaning_ja": null
+      "meaning_ja": "急速に発展する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 139,
       "word": "catalyst",
-      "meaning_ja": null
+      "meaning_ja": "触媒；変化を促すもの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 140,
       "word": "clout",
-      "meaning_ja": null
+      "meaning_ja": "影響力",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 141,
       "word": "fallacy",
-      "meaning_ja": null
+      "meaning_ja": "誤った考え；誤謬",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 142,
       "word": "quandary",
-      "meaning_ja": null
+      "meaning_ja": "困惑；板挟み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 143,
       "word": "commotion",
-      "meaning_ja": null
+      "meaning_ja": "騒動",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 144,
       "word": "consternation",
-      "meaning_ja": null
+      "meaning_ja": "驚愕；狼狽",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 145,
       "word": "litany",
-      "meaning_ja": null
+      "meaning_ja": "長々とした列挙；連祷",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 146,
       "word": "fiasco",
-      "meaning_ja": null
+      "meaning_ja": "大失敗",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 147,
       "word": "fruition",
-      "meaning_ja": null
+      "meaning_ja": "実現；結実",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 148,
       "word": "perk",
-      "meaning_ja": null
+      "meaning_ja": "特典；役得",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 149,
       "word": "culprit",
-      "meaning_ja": null
+      "meaning_ja": "犯人；原因",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 150,
       "word": "deference",
-      "meaning_ja": null
+      "meaning_ja": "敬意；恭順",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 151,
       "word": "demise",
-      "meaning_ja": null
+      "meaning_ja": "終焉；死",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 152,
       "word": "rapport",
-      "meaning_ja": null
+      "meaning_ja": "親密な関係",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 153,
       "word": "fugitive",
-      "meaning_ja": null
+      "meaning_ja": "逃亡者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 154,
       "word": "concussion",
-      "meaning_ja": null
+      "meaning_ja": "脳震盪",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 155,
       "word": "retaliation",
-      "meaning_ja": null
+      "meaning_ja": "報復",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 156,
       "word": "anesthetic",
-      "meaning_ja": null
+      "meaning_ja": "麻酔薬；麻酔の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 157,
       "word": "brunt",
-      "meaning_ja": null
+      "meaning_ja": "攻撃などの矢面",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 158,
       "word": "caliber",
-      "meaning_ja": null
+      "meaning_ja": "能力の程度；口径",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 159,
       "word": "precursor",
-      "meaning_ja": null
+      "meaning_ja": "先駆者；前兆",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 160,
       "word": "knack",
-      "meaning_ja": null
+      "meaning_ja": "こつ；才能",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 161,
       "word": "foliage",
-      "meaning_ja": null
+      "meaning_ja": "葉；葉の茂み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 162,
       "word": "contingency",
-      "meaning_ja": null
+      "meaning_ja": "不測の事態",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 163,
       "word": "scruple",
-      "meaning_ja": null
+      "meaning_ja": "良心のとがめ；ためらい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 164,
       "word": "immunity",
-      "meaning_ja": null
+      "meaning_ja": "免疫；免除",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 165,
       "word": "repercussion",
-      "meaning_ja": null
+      "meaning_ja": "波及的影響",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 166,
       "word": "misgiving",
-      "meaning_ja": null
+      "meaning_ja": "不安；疑念",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 167,
       "word": "farce",
-      "meaning_ja": null
+      "meaning_ja": "茶番；笑劇",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 168,
       "word": "animosity",
-      "meaning_ja": null
+      "meaning_ja": "敵意",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 169,
       "word": "rationale",
-      "meaning_ja": null
+      "meaning_ja": "理論的根拠",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 170,
       "word": "grievance",
-      "meaning_ja": null
+      "meaning_ja": "不満；苦情",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 171,
       "word": "glitch",
-      "meaning_ja": null
+      "meaning_ja": "小さな不具合",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 172,
       "word": "impunity",
-      "meaning_ja": null
+      "meaning_ja": "処罰を免れること",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 173,
       "word": "adherent",
-      "meaning_ja": null
+      "meaning_ja": "支持者；信奉者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 174,
       "word": "misnomer",
-      "meaning_ja": null
+      "meaning_ja": "誤った名称",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 175,
       "word": "backlog",
-      "meaning_ja": null
+      "meaning_ja": "未処理の仕事",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 176,
       "word": "abject",
-      "meaning_ja": null
+      "meaning_ja": "悲惨な；卑屈な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 177,
       "word": "ulterior",
-      "meaning_ja": null
+      "meaning_ja": "隠された；裏の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 178,
       "word": "aloof",
-      "meaning_ja": null
+      "meaning_ja": "よそよそしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 179,
       "word": "incoherent",
-      "meaning_ja": null
+      "meaning_ja": "支離滅裂な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 180,
       "word": "flagrant",
-      "meaning_ja": null
+      "meaning_ja": "目に余る；甚だしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 181,
       "word": "brazen",
-      "meaning_ja": null
+      "meaning_ja": "厚かましい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 182,
       "word": "engrossed",
-      "meaning_ja": null
+      "meaning_ja": "夢中になった",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 183,
       "word": "mundane",
-      "meaning_ja": null
+      "meaning_ja": "ありふれた；日常の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 184,
       "word": "oblivious",
-      "meaning_ja": null
+      "meaning_ja": "気付かない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 185,
       "word": "interim",
-      "meaning_ja": null
+      "meaning_ja": "暫定的な；中間の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 186,
       "word": "destitute",
-      "meaning_ja": null
+      "meaning_ja": "極貧の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 187,
       "word": "altruistic",
-      "meaning_ja": null
+      "meaning_ja": "利他的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 188,
       "word": "drab",
-      "meaning_ja": null
+      "meaning_ja": "単調でつまらない；くすんだ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 189,
       "word": "obtrusive",
-      "meaning_ja": null
+      "meaning_ja": "目障りな；出しゃばりな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 190,
       "word": "reclusive",
-      "meaning_ja": null
+      "meaning_ja": "世間を避けた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 191,
       "word": "unscathed",
-      "meaning_ja": null
+      "meaning_ja": "無傷の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 192,
       "word": "preemptive",
-      "meaning_ja": null
+      "meaning_ja": "先制の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 193,
       "word": "belligerent",
-      "meaning_ja": null
+      "meaning_ja": "好戦的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 194,
       "word": "frugal",
-      "meaning_ja": null
+      "meaning_ja": "倹約的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 195,
       "word": "archaic",
-      "meaning_ja": null
+      "meaning_ja": "古風な；廃れた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 196,
       "word": "clandestine",
-      "meaning_ja": null
+      "meaning_ja": "秘密裏の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 197,
       "word": "equitable",
-      "meaning_ja": null
+      "meaning_ja": "公平な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 198,
       "word": "reminiscent",
-      "meaning_ja": null
+      "meaning_ja": "思い出させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 199,
       "word": "inadvertently",
-      "meaning_ja": null
+      "meaning_ja": "不注意で；うっかり",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 200,
       "word": "irreparably",
-      "meaning_ja": null
+      "meaning_ja": "修復できないほど",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 201,
       "word": "interject",
-      "meaning_ja": null
+      "meaning_ja": "口を挟む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 202,
       "word": "apprehend",
-      "meaning_ja": null
+      "meaning_ja": "逮捕する；理解する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 203,
       "word": "plagiarize",
-      "meaning_ja": null
+      "meaning_ja": "盗用する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 204,
       "word": "subvert",
-      "meaning_ja": null
+      "meaning_ja": "転覆させる；覆す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 205,
       "word": "savor",
-      "meaning_ja": null
+      "meaning_ja": "味わう",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 206,
       "word": "culminate",
-      "meaning_ja": null
+      "meaning_ja": "最高潮に達する；結果として至る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 207,
       "word": "salvage",
-      "meaning_ja": null
+      "meaning_ja": "救出する；回収する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 208,
       "word": "vie",
-      "meaning_ja": null
+      "meaning_ja": "競う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 209,
       "word": "bequeath",
-      "meaning_ja": null
+      "meaning_ja": "遺贈する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 210,
       "word": "languish",
-      "meaning_ja": null
+      "meaning_ja": "衰弱する；不遇に暮らす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 211,
       "word": "infest",
-      "meaning_ja": null
+      "meaning_ja": "害虫などがはびこる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 212,
       "word": "ambush",
-      "meaning_ja": null
+      "meaning_ja": "待ち伏せする；待ち伏せ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 213,
       "word": "placate",
-      "meaning_ja": null
+      "meaning_ja": "なだめる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 214,
       "word": "abate",
-      "meaning_ja": null
+      "meaning_ja": "弱まる；和らげる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 215,
       "word": "invoke",
-      "meaning_ja": null
+      "meaning_ja": "援用する；呼び起こす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 216,
       "word": "rebuke",
-      "meaning_ja": null
+      "meaning_ja": "叱責する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 217,
       "word": "deviate",
-      "meaning_ja": null
+      "meaning_ja": "逸脱する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 218,
       "word": "tarnish",
-      "meaning_ja": null
+      "meaning_ja": "評判を傷つける；曇らせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 219,
       "word": "exasperate",
-      "meaning_ja": null
+      "meaning_ja": "ひどくいら立たせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 220,
       "word": "emulate",
-      "meaning_ja": null
+      "meaning_ja": "見習う；競ってまねる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 221,
       "word": "exude",
-      "meaning_ja": null
+      "meaning_ja": "にじみ出る；醸し出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 222,
       "word": "annex",
-      "meaning_ja": null
+      "meaning_ja": "併合する；別館",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 223,
       "word": "infer",
-      "meaning_ja": null
+      "meaning_ja": "推論する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 224,
       "word": "dissipate",
-      "meaning_ja": null
+      "meaning_ja": "散らす；消散する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 225,
       "word": "hamper",
-      "meaning_ja": null
+      "meaning_ja": "妨げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 226,
       "word": "hatch",
-      "meaning_ja": null
+      "meaning_ja": "孵化する；計画を企てる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 227,
       "word": "bolster",
-      "meaning_ja": null
+      "meaning_ja": "強化する；支える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 228,
       "word": "eschew",
-      "meaning_ja": null
+      "meaning_ja": "避ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 229,
       "word": "extricate",
-      "meaning_ja": null
+      "meaning_ja": "窮地から救い出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 230,
       "word": "muster",
-      "meaning_ja": null
+      "meaning_ja": "集める；勇気を奮い起こす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 231,
       "word": "encapsulate",
-      "meaning_ja": null
+      "meaning_ja": "要約する；包み込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 232,
       "word": "forfeit",
-      "meaning_ja": null
+      "meaning_ja": "没収される；失う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 233,
       "word": "torment",
-      "meaning_ja": null
+      "meaning_ja": "苦しめる；苦痛",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 234,
       "word": "augment",
-      "meaning_ja": null
+      "meaning_ja": "増大させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 235,
       "word": "alleviate",
-      "meaning_ja": null
+      "meaning_ja": "軽減する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 236,
       "word": "reiterate",
-      "meaning_ja": null
+      "meaning_ja": "繰り返し述べる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 237,
       "word": "accost",
-      "meaning_ja": null
+      "meaning_ja": "近寄って声をかける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 238,
       "word": "implore",
-      "meaning_ja": null
+      "meaning_ja": "懇願する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 239,
       "word": "conjure",
-      "meaning_ja": null
+      "meaning_ja": "魔法で呼び出す；思い起こさせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 240,
       "word": "pilfer",
-      "meaning_ja": null
+      "meaning_ja": "少しずつ盗む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 241,
       "word": "propel",
-      "meaning_ja": null
+      "meaning_ja": "推進する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 242,
       "word": "retort",
-      "meaning_ja": null
+      "meaning_ja": "言い返す；応酬",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 243,
       "word": "camaraderie",
-      "meaning_ja": null
+      "meaning_ja": "仲間意識",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 244,
       "word": "accomplice",
-      "meaning_ja": null
+      "meaning_ja": "共犯者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 245,
       "word": "feud",
-      "meaning_ja": null
+      "meaning_ja": "長年の確執",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 246,
       "word": "vicinity",
-      "meaning_ja": null
+      "meaning_ja": "近辺",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 247,
       "word": "reconnaissance",
-      "meaning_ja": null
+      "meaning_ja": "偵察",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 248,
       "word": "conflagration",
-      "meaning_ja": null
+      "meaning_ja": "大火災",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 249,
       "word": "ramification",
-      "meaning_ja": null
+      "meaning_ja": "派生する影響；分岐",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 250,
       "word": "connoisseur",
-      "meaning_ja": null
+      "meaning_ja": "鑑識眼のある人",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 251,
       "word": "enmity",
-      "meaning_ja": null
+      "meaning_ja": "敵意；憎悪",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 252,
       "word": "gall",
-      "meaning_ja": null
+      "meaning_ja": "厚かましさ；いら立たせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 253,
       "word": "conjecture",
-      "meaning_ja": null
+      "meaning_ja": "推測",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 254,
       "word": "solace",
-      "meaning_ja": null
+      "meaning_ja": "慰め",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 255,
       "word": "accolade",
-      "meaning_ja": null
+      "meaning_ja": "称賛；栄誉",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 256,
       "word": "referendum",
-      "meaning_ja": null
+      "meaning_ja": "国民投票",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 257,
       "word": "caricature",
-      "meaning_ja": null
+      "meaning_ja": "風刺画；誇張した描写",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 258,
       "word": "prodigy",
-      "meaning_ja": null
+      "meaning_ja": "神童",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 259,
       "word": "deluge",
-      "meaning_ja": null
+      "meaning_ja": "大洪水；殺到",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 260,
       "word": "compunction",
-      "meaning_ja": null
+      "meaning_ja": "良心の呵責",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 261,
       "word": "clique",
-      "meaning_ja": null
+      "meaning_ja": "排他的な小集団",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 262,
       "word": "sustenance",
-      "meaning_ja": null
+      "meaning_ja": "食料；生計の維持",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 263,
       "word": "debacle",
-      "meaning_ja": null
+      "meaning_ja": "大失敗；崩壊",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 264,
       "word": "vent",
-      "meaning_ja": null
+      "meaning_ja": "感情を発散する；通気口",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 265,
       "word": "valiant",
-      "meaning_ja": null
+      "meaning_ja": "勇敢な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 266,
       "word": "ardent",
-      "meaning_ja": null
+      "meaning_ja": "熱烈な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 267,
       "word": "cavalier",
-      "meaning_ja": null
+      "meaning_ja": "無頓着な；横柄な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 268,
       "word": "incontrovertible",
-      "meaning_ja": null
+      "meaning_ja": "議論の余地のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 269,
       "word": "brash",
-      "meaning_ja": null
+      "meaning_ja": "無鉄砲な；厚かましい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 270,
       "word": "disheveled",
-      "meaning_ja": null
+      "meaning_ja": "髪や服が乱れた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 271,
       "word": "grueling",
-      "meaning_ja": null
+      "meaning_ja": "非常にきつい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 272,
       "word": "excruciating",
-      "meaning_ja": null
+      "meaning_ja": "耐え難く痛い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 273,
       "word": "impending",
-      "meaning_ja": null
+      "meaning_ja": "差し迫った",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 274,
       "word": "infatuated",
-      "meaning_ja": null
+      "meaning_ja": "夢中になった；のぼせ上がった",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 275,
       "word": "gullible",
-      "meaning_ja": null
+      "meaning_ja": "だまされやすい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 276,
       "word": "irate",
-      "meaning_ja": null
+      "meaning_ja": "激怒した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 277,
       "word": "malleable",
-      "meaning_ja": null
+      "meaning_ja": "形を変えやすい；影響されやすい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 278,
       "word": "nonchalant",
-      "meaning_ja": null
+      "meaning_ja": "平然とした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 279,
       "word": "fervent",
-      "meaning_ja": null
+      "meaning_ja": "熱烈な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 280,
       "word": "verbose",
-      "meaning_ja": null
+      "meaning_ja": "冗長な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 281,
       "word": "quaint",
-      "meaning_ja": null
+      "meaning_ja": "趣のある；風変わりな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 282,
       "word": "exquisite",
-      "meaning_ja": null
+      "meaning_ja": "非常に美しい；精巧な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 283,
       "word": "erratic",
-      "meaning_ja": null
+      "meaning_ja": "不規則な；気まぐれな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 284,
       "word": "somber",
-      "meaning_ja": null
+      "meaning_ja": "陰気な；厳粛な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 285,
       "word": "untenable",
-      "meaning_ja": null
+      "meaning_ja": "擁護できない；維持できない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 286,
       "word": "squeamish",
-      "meaning_ja": null
+      "meaning_ja": "気分が悪くなりやすい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 287,
       "word": "paltry",
-      "meaning_ja": null
+      "meaning_ja": "わずかな；取るに足らない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 288,
       "word": "pedantic",
-      "meaning_ja": null
+      "meaning_ja": "学者ぶった；細部にこだわる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 289,
       "word": "fastidious",
-      "meaning_ja": null
+      "meaning_ja": "好みがうるさい；几帳面な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 290,
       "word": "poignant",
-      "meaning_ja": null
+      "meaning_ja": "心を強く打つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 291,
       "word": "staunch",
-      "meaning_ja": null
+      "meaning_ja": "忠実な；断固とした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 292,
       "word": "idyllic",
-      "meaning_ja": null
+      "meaning_ja": "牧歌的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 293,
       "word": "candid",
-      "meaning_ja": null
+      "meaning_ja": "率直な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 294,
       "word": "murky",
-      "meaning_ja": null
+      "meaning_ja": "暗く濁った；不明瞭な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 295,
       "word": "pungent",
-      "meaning_ja": null
+      "meaning_ja": "刺激臭のある；辛辣な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 296,
       "word": "auspicious",
-      "meaning_ja": null
+      "meaning_ja": "幸先のよい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 297,
       "word": "menial",
-      "meaning_ja": null
+      "meaning_ja": "単純で低く見られがちな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 298,
       "word": "resplendent",
-      "meaning_ja": null
+      "meaning_ja": "光り輝く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 299,
       "word": "tepid",
-      "meaning_ja": null
+      "meaning_ja": "ぬるい；熱意のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 300,
       "word": "overt",
-      "meaning_ja": null
+      "meaning_ja": "公然の；明白な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 301,
       "word": "polarize",
-      "meaning_ja": null
+      "meaning_ja": "二極化させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 302,
       "word": "baffle",
-      "meaning_ja": null
+      "meaning_ja": "困惑させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 303,
       "word": "douse",
-      "meaning_ja": null
+      "meaning_ja": "水を浴びせる；火を消す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 304,
       "word": "incarcerate",
-      "meaning_ja": null
+      "meaning_ja": "投獄する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 305,
       "word": "vindicate",
-      "meaning_ja": null
+      "meaning_ja": "正しさを証明する；汚名をそそぐ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 306,
       "word": "vacillate",
-      "meaning_ja": null
+      "meaning_ja": "ためらう；揺れ動く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 307,
       "word": "insinuate",
-      "meaning_ja": null
+      "meaning_ja": "ほのめかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 308,
       "word": "covet",
-      "meaning_ja": null
+      "meaning_ja": "切望する；むやみに欲しがる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 309,
       "word": "mollify",
-      "meaning_ja": null
+      "meaning_ja": "なだめる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 310,
       "word": "procrastinate",
-      "meaning_ja": null
+      "meaning_ja": "先延ばしする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 311,
       "word": "incapacitate",
-      "meaning_ja": null
+      "meaning_ja": "能力を奪う；動けなくする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 312,
       "word": "thwart",
-      "meaning_ja": null
+      "meaning_ja": "阻止する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 313,
       "word": "smother",
-      "meaning_ja": null
+      "meaning_ja": "窒息させる；覆い尽くす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 314,
       "word": "permeate",
-      "meaning_ja": null
+      "meaning_ja": "浸透する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 315,
       "word": "inundate",
-      "meaning_ja": null
+      "meaning_ja": "殺到する；水浸しにする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 316,
       "word": "quench",
-      "meaning_ja": null
+      "meaning_ja": "渇きを癒やす；火を消す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 317,
       "word": "mortify",
-      "meaning_ja": null
+      "meaning_ja": "ひどく恥ずかしい思いをさせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 318,
       "word": "dispel",
-      "meaning_ja": null
+      "meaning_ja": "払いのける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 319,
       "word": "pamper",
-      "meaning_ja": null
+      "meaning_ja": "甘やかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 320,
       "word": "dawdle",
-      "meaning_ja": null
+      "meaning_ja": "ぐずぐずする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 321,
       "word": "relegate",
-      "meaning_ja": null
+      "meaning_ja": "格下げする；追いやる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 322,
       "word": "scrawl",
-      "meaning_ja": null
+      "meaning_ja": "走り書きする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 323,
       "word": "lurch",
-      "meaning_ja": null
+      "meaning_ja": "よろめく；急に傾く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 324,
       "word": "disband",
-      "meaning_ja": null
+      "meaning_ja": "解散する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 325,
       "word": "procure",
-      "meaning_ja": null
+      "meaning_ja": "調達する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 326,
       "word": "heave",
-      "meaning_ja": null
+      "meaning_ja": "力を込めて持ち上げる；うねる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 327,
       "word": "hoard",
-      "meaning_ja": null
+      "meaning_ja": "ため込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 328,
       "word": "adorn",
-      "meaning_ja": null
+      "meaning_ja": "飾る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 329,
       "word": "astound",
-      "meaning_ja": null
+      "meaning_ja": "仰天させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 330,
       "word": "substantiate",
-      "meaning_ja": null
+      "meaning_ja": "立証する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 331,
       "word": "bestow",
-      "meaning_ja": null
+      "meaning_ja": "授ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 332,
       "word": "consecrate",
-      "meaning_ja": null
+      "meaning_ja": "神聖なものにする；捧げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 333,
       "word": "absolve",
-      "meaning_ja": null
+      "meaning_ja": "罪を免除する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 334,
       "word": "engender",
-      "meaning_ja": null
+      "meaning_ja": "生じさせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 335,
       "word": "exacerbate",
-      "meaning_ja": null
+      "meaning_ja": "悪化させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 336,
       "word": "demean",
-      "meaning_ja": null
+      "meaning_ja": "品位を落とす；侮辱する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 337,
       "word": "revile",
-      "meaning_ja": null
+      "meaning_ja": "ののしる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 338,
       "word": "straddle",
-      "meaning_ja": null
+      "meaning_ja": "またがる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 339,
       "word": "encumber",
-      "meaning_ja": null
+      "meaning_ja": "妨げる；負担をかける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 340,
       "word": "imbue",
-      "meaning_ja": null
+      "meaning_ja": "感情などを吹き込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 341,
       "word": "forge",
-      "meaning_ja": null
+      "meaning_ja": "偽造する；築く；鍛造する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 342,
       "word": "intercept",
-      "meaning_ja": null
+      "meaning_ja": "途中で止める；傍受する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 343,
       "word": "rummage",
-      "meaning_ja": null
+      "meaning_ja": "かき回して探す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 344,
       "word": "detract",
-      "meaning_ja": null
+      "meaning_ja": "価値を減じる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 345,
       "word": "repudiate",
-      "meaning_ja": null
+      "meaning_ja": "否認する；拒絶する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 346,
       "word": "disdain",
-      "meaning_ja": null
+      "meaning_ja": "軽蔑する；軽蔑",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 347,
       "word": "bigotry",
-      "meaning_ja": null
+      "meaning_ja": "偏狭さ；偏見",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 348,
       "word": "prowess",
-      "meaning_ja": null
+      "meaning_ja": "優れた技能；武勇",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 349,
       "word": "turmoil",
-      "meaning_ja": null
+      "meaning_ja": "混乱；騒乱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 350,
       "word": "morale",
-      "meaning_ja": null
+      "meaning_ja": "士気",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 351,
       "word": "boon",
-      "meaning_ja": null
+      "meaning_ja": "恩恵",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 352,
       "word": "diatribe",
-      "meaning_ja": null
+      "meaning_ja": "痛烈な非難",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 353,
       "word": "acquittal",
-      "meaning_ja": null
+      "meaning_ja": "無罪判決",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 354,
       "word": "homage",
-      "meaning_ja": null
+      "meaning_ja": "敬意",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 355,
       "word": "rubble",
-      "meaning_ja": null
+      "meaning_ja": "がれき",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 356,
       "word": "echelon",
-      "meaning_ja": null
+      "meaning_ja": "階層；階級",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 357,
       "word": "gist",
-      "meaning_ja": null
+      "meaning_ja": "要点",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 358,
       "word": "brevity",
-      "meaning_ja": null
+      "meaning_ja": "簡潔さ；短さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 359,
       "word": "condolence",
-      "meaning_ja": null
+      "meaning_ja": "お悔やみ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 360,
       "word": "penchant",
-      "meaning_ja": null
+      "meaning_ja": "強い好み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 361,
       "word": "charlatan",
-      "meaning_ja": null
+      "meaning_ja": "いかさま師",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 362,
       "word": "blemish",
-      "meaning_ja": null
+      "meaning_ja": "傷；欠点",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 363,
       "word": "reparation",
-      "meaning_ja": null
+      "meaning_ja": "賠償；修復",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 364,
       "word": "gorge",
-      "meaning_ja": null
+      "meaning_ja": "峡谷；がつがつ食べる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 365,
       "word": "rampage",
-      "meaning_ja": null
+      "meaning_ja": "暴れ回る；暴動",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 366,
       "word": "annulment",
-      "meaning_ja": null
+      "meaning_ja": "無効化；取り消し",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 367,
       "word": "impasse",
-      "meaning_ja": null
+      "meaning_ja": "行き詰まり",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 368,
       "word": "fidelity",
-      "meaning_ja": null
+      "meaning_ja": "忠実；正確さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 369,
       "word": "diffident",
-      "meaning_ja": null
+      "meaning_ja": "自信のない；遠慮がちな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 370,
       "word": "abridged",
-      "meaning_ja": null
+      "meaning_ja": "要約された；短縮された",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 371,
       "word": "dainty",
-      "meaning_ja": null
+      "meaning_ja": "小さく上品な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 372,
       "word": "dilapidated",
-      "meaning_ja": null
+      "meaning_ja": "荒れ果てた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 373,
       "word": "profound",
-      "meaning_ja": null
+      "meaning_ja": "深遠な；深い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 374,
       "word": "imperative",
-      "meaning_ja": null
+      "meaning_ja": "不可欠な；命令的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 375,
       "word": "elusive",
-      "meaning_ja": null
+      "meaning_ja": "捕らえにくい；理解しにくい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 376,
       "word": "capricious",
-      "meaning_ja": null
+      "meaning_ja": "気まぐれな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 377,
       "word": "endemic",
-      "meaning_ja": null
+      "meaning_ja": "特定地域に固有の；蔓延した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 378,
       "word": "frigid",
-      "meaning_ja": null
+      "meaning_ja": "極寒の；冷淡な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 379,
       "word": "docile",
-      "meaning_ja": null
+      "meaning_ja": "従順な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 380,
       "word": "frenetic",
-      "meaning_ja": null
+      "meaning_ja": "熱狂的な；大慌ての",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 381,
       "word": "despondent",
-      "meaning_ja": null
+      "meaning_ja": "落胆した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 382,
       "word": "lurid",
-      "meaning_ja": null
+      "meaning_ja": "どぎつい；衝撃的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 383,
       "word": "presumptuous",
-      "meaning_ja": null
+      "meaning_ja": "厚かましい；おこがましい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 384,
       "word": "buoyant",
-      "meaning_ja": null
+      "meaning_ja": "浮力のある；快活な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 385,
       "word": "conducive",
-      "meaning_ja": null
+      "meaning_ja": "役立つ；促進する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 386,
       "word": "stagnant",
-      "meaning_ja": null
+      "meaning_ja": "停滞した；よどんだ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 387,
       "word": "culpable",
-      "meaning_ja": null
+      "meaning_ja": "非難されるべき",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 388,
       "word": "placid",
-      "meaning_ja": null
+      "meaning_ja": "穏やかな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 389,
       "word": "erroneous",
-      "meaning_ja": null
+      "meaning_ja": "誤った",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 390,
       "word": "ambivalent",
-      "meaning_ja": null
+      "meaning_ja": "相反する感情を持つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 391,
       "word": "impervious",
-      "meaning_ja": null
+      "meaning_ja": "影響されない；通さない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 392,
       "word": "succinct",
-      "meaning_ja": null
+      "meaning_ja": "簡潔な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 393,
       "word": "palatable",
-      "meaning_ja": null
+      "meaning_ja": "口に合う；受け入れられる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 394,
       "word": "exorbitant",
-      "meaning_ja": null
+      "meaning_ja": "法外な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 395,
       "word": "exuberant",
-      "meaning_ja": null
+      "meaning_ja": "活気にあふれた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 396,
       "word": "tantamount",
-      "meaning_ja": null
+      "meaning_ja": "同然の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 397,
       "word": "cumbersome",
-      "meaning_ja": null
+      "meaning_ja": "扱いにくい；かさばる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 398,
       "word": "delinquent",
-      "meaning_ja": null
+      "meaning_ja": "非行の；滞納している",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 399,
       "word": "antagonistic",
-      "meaning_ja": null
+      "meaning_ja": "敵対的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 400,
       "word": "haphazardly",
-      "meaning_ja": null
+      "meaning_ja": "行き当たりばったりに",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 401,
       "word": "confiscate",
-      "meaning_ja": null
+      "meaning_ja": "没収する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 402,
       "word": "bemoan",
-      "meaning_ja": null
+      "meaning_ja": "嘆く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 403,
       "word": "denigrate",
-      "meaning_ja": null
+      "meaning_ja": "けなす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 404,
       "word": "wince",
-      "meaning_ja": null
+      "meaning_ja": "痛みで顔をしかめる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 405,
       "word": "assuage",
-      "meaning_ja": null
+      "meaning_ja": "和らげる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 406,
       "word": "accrue",
-      "meaning_ja": null
+      "meaning_ja": "蓄積する；生じる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 407,
       "word": "connive",
-      "meaning_ja": null
+      "meaning_ja": "共謀する；見て見ぬふりをする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 408,
       "word": "transpire",
-      "meaning_ja": null
+      "meaning_ja": "起こる；明らかになる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 409,
       "word": "fret",
-      "meaning_ja": null
+      "meaning_ja": "思い悩む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 410,
       "word": "pander",
-      "meaning_ja": null
+      "meaning_ja": "欲望に迎合する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 411,
       "word": "flounder",
-      "meaning_ja": null
+      "meaning_ja": "もがく；まごつく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 412,
       "word": "elude",
-      "meaning_ja": null
+      "meaning_ja": "逃れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 413,
       "word": "deduce",
-      "meaning_ja": null
+      "meaning_ja": "演繹する；推論する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 414,
       "word": "decimate",
-      "meaning_ja": null
+      "meaning_ja": "大幅に減らす；壊滅させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 415,
       "word": "teeter",
-      "meaning_ja": null
+      "meaning_ja": "ぐらつく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 416,
       "word": "shun",
-      "meaning_ja": null
+      "meaning_ja": "避ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 417,
       "word": "coax",
-      "meaning_ja": null
+      "meaning_ja": "なだめて説得する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 418,
       "word": "dissuade",
-      "meaning_ja": null
+      "meaning_ja": "思いとどまらせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 419,
       "word": "instill",
-      "meaning_ja": null
+      "meaning_ja": "徐々に植え付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 420,
       "word": "exhort",
-      "meaning_ja": null
+      "meaning_ja": "強く勧める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 421,
       "word": "peruse",
-      "meaning_ja": null
+      "meaning_ja": "熟読する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 422,
       "word": "repel",
-      "meaning_ja": null
+      "meaning_ja": "撃退する；嫌悪を抱かせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 423,
       "word": "purge",
-      "meaning_ja": null
+      "meaning_ja": "除去する；粛清する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 424,
       "word": "abscond",
-      "meaning_ja": null
+      "meaning_ja": "持ち逃げする；逃亡する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 425,
       "word": "swerve",
-      "meaning_ja": null
+      "meaning_ja": "急にそれる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 426,
       "word": "meander",
-      "meaning_ja": null
+      "meaning_ja": "曲がりくねる；漫然と進む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 427,
       "word": "grapple",
-      "meaning_ja": null
+      "meaning_ja": "取り組む；取っ組み合う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 428,
       "word": "prod",
-      "meaning_ja": null
+      "meaning_ja": "突く；促す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 429,
       "word": "dangle",
-      "meaning_ja": null
+      "meaning_ja": "ぶら下がる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 430,
       "word": "perpetrate",
-      "meaning_ja": null
+      "meaning_ja": "犯罪を犯す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 431,
       "word": "traverse",
-      "meaning_ja": null
+      "meaning_ja": "横断する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 432,
       "word": "blur",
-      "meaning_ja": null
+      "meaning_ja": "ぼやけさせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 433,
       "word": "dislodge",
-      "meaning_ja": null
+      "meaning_ja": "取り除く；追い出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 434,
       "word": "infraction",
-      "meaning_ja": null
+      "meaning_ja": "違反",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 435,
       "word": "lesion",
-      "meaning_ja": null
+      "meaning_ja": "病変；損傷",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 436,
       "word": "hermit",
-      "meaning_ja": null
+      "meaning_ja": "隠者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 437,
       "word": "ultimatum",
-      "meaning_ja": null
+      "meaning_ja": "最後通告",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 438,
       "word": "truce",
-      "meaning_ja": null
+      "meaning_ja": "休戦",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 439,
       "word": "twinge",
-      "meaning_ja": null
+      "meaning_ja": "鋭い痛み；良心の痛み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 440,
       "word": "stint",
-      "meaning_ja": null
+      "meaning_ja": "一定期間の仕事；出し惜しむ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 441,
       "word": "vigil",
-      "meaning_ja": null
+      "meaning_ja": "徹夜の見守り",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 442,
       "word": "wrath",
-      "meaning_ja": null
+      "meaning_ja": "激怒",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 443,
       "word": "ember",
-      "meaning_ja": null
+      "meaning_ja": "燃えさし",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 444,
       "word": "premium",
-      "meaning_ja": null
+      "meaning_ja": "保険料；割増金；上質の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 445,
       "word": "concession",
-      "meaning_ja": null
+      "meaning_ja": "譲歩；特許権",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 446,
       "word": "brawl",
-      "meaning_ja": null
+      "meaning_ja": "乱闘",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 447,
       "word": "debris",
-      "meaning_ja": null
+      "meaning_ja": "破片；がれき",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 448,
       "word": "hassle",
-      "meaning_ja": null
+      "meaning_ja": "面倒；煩わせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 449,
       "word": "inception",
-      "meaning_ja": null
+      "meaning_ja": "始まり",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 450,
       "word": "reprisal",
-      "meaning_ja": null
+      "meaning_ja": "報復",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 451,
       "word": "innuendo",
-      "meaning_ja": null
+      "meaning_ja": "当てこすり；ほのめかし",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 452,
       "word": "impediment",
-      "meaning_ja": null
+      "meaning_ja": "障害",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 453,
       "word": "stake",
-      "meaning_ja": null
+      "meaning_ja": "利害関係；賭け金；杭",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 454,
       "word": "imposition",
-      "meaning_ja": null
+      "meaning_ja": "押し付け；課税",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 455,
       "word": "retention",
-      "meaning_ja": null
+      "meaning_ja": "保持",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 456,
       "word": "resurgence",
-      "meaning_ja": null
+      "meaning_ja": "復活；再燃",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 457,
       "word": "cinch",
-      "meaning_ja": null
+      "meaning_ja": "容易なこと；確実なこと",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 458,
       "word": "throng",
-      "meaning_ja": null
+      "meaning_ja": "群衆",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 459,
       "word": "complexion",
-      "meaning_ja": null
+      "meaning_ja": "顔色；様相",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 460,
       "word": "blunder",
-      "meaning_ja": null
+      "meaning_ja": "大失敗；大失敗する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 461,
       "word": "consort",
-      "meaning_ja": null
+      "meaning_ja": "交際する；配偶者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 462,
       "word": "requisite",
-      "meaning_ja": null
+      "meaning_ja": "必要なもの；必要な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 463,
       "word": "cryptic",
-      "meaning_ja": null
+      "meaning_ja": "謎めいた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 464,
       "word": "reprehensible",
-      "meaning_ja": null
+      "meaning_ja": "非難に値する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 465,
       "word": "prolific",
-      "meaning_ja": null
+      "meaning_ja": "多作の；多産の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 466,
       "word": "discerning",
-      "meaning_ja": null
+      "meaning_ja": "識別力のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 467,
       "word": "precocious",
-      "meaning_ja": null
+      "meaning_ja": "早熟な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 468,
       "word": "tantalizing",
-      "meaning_ja": null
+      "meaning_ja": "じれったいほど魅力的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 469,
       "word": "unkempt",
-      "meaning_ja": null
+      "meaning_ja": "身なりがだらしない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 470,
       "word": "fickle",
-      "meaning_ja": null
+      "meaning_ja": "気まぐれな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 471,
       "word": "acrid",
-      "meaning_ja": null
+      "meaning_ja": "刺激臭のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 472,
       "word": "jaded",
-      "meaning_ja": null
+      "meaning_ja": "疲れ切った；飽き飽きした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 473,
       "word": "plausible",
-      "meaning_ja": null
+      "meaning_ja": "もっともらしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 474,
       "word": "rudimentary",
-      "meaning_ja": null
+      "meaning_ja": "初歩的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 475,
       "word": "banal",
-      "meaning_ja": null
+      "meaning_ja": "陳腐な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 476,
       "word": "eligible",
-      "meaning_ja": null
+      "meaning_ja": "資格のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 477,
       "word": "transient",
-      "meaning_ja": null
+      "meaning_ja": "一時的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 478,
       "word": "chronic",
-      "meaning_ja": null
+      "meaning_ja": "慢性的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 479,
       "word": "indelible",
-      "meaning_ja": null
+      "meaning_ja": "消せない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 480,
       "word": "robust",
-      "meaning_ja": null
+      "meaning_ja": "頑健な；力強い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 481,
       "word": "derelict",
-      "meaning_ja": null
+      "meaning_ja": "遺棄された；義務を怠った",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 482,
       "word": "exemplary",
-      "meaning_ja": null
+      "meaning_ja": "模範的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 483,
       "word": "incremental",
-      "meaning_ja": null
+      "meaning_ja": "徐々に増える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 484,
       "word": "opulent",
-      "meaning_ja": null
+      "meaning_ja": "豪華な；裕福な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 485,
       "word": "pertinent",
-      "meaning_ja": null
+      "meaning_ja": "関連する；適切な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 486,
       "word": "sleek",
-      "meaning_ja": null
+      "meaning_ja": "滑らかな；洗練された",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 487,
       "word": "deplorable",
-      "meaning_ja": null
+      "meaning_ja": "嘆かわしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 488,
       "word": "perennial",
-      "meaning_ja": null
+      "meaning_ja": "多年生の；絶え間ない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 489,
       "word": "treacherous",
-      "meaning_ja": null
+      "meaning_ja": "裏切りの；危険な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 490,
       "word": "disparate",
-      "meaning_ja": null
+      "meaning_ja": "異質な；大きく異なる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 491,
       "word": "incessant",
-      "meaning_ja": null
+      "meaning_ja": "絶え間ない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 492,
       "word": "unruly",
-      "meaning_ja": null
+      "meaning_ja": "手に負えない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 493,
       "word": "perfunctory",
-      "meaning_ja": null
+      "meaning_ja": "おざなりの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 494,
       "word": "astute",
-      "meaning_ja": null
+      "meaning_ja": "洞察力のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 495,
       "word": "invincible",
-      "meaning_ja": null
+      "meaning_ja": "無敵の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 496,
       "word": "morbid",
-      "meaning_ja": null
+      "meaning_ja": "病的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 497,
       "word": "derogatory",
-      "meaning_ja": null
+      "meaning_ja": "軽蔑的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 498,
       "word": "inquisitive",
-      "meaning_ja": null
+      "meaning_ja": "好奇心の強い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 499,
       "word": "sheepishly",
-      "meaning_ja": null
+      "meaning_ja": "きまり悪そうに",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 500,
       "word": "vehemently",
-      "meaning_ja": null
+      "meaning_ja": "激しく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 501,
       "word": "evolve",
-      "meaning_ja": null
+      "meaning_ja": "進化する；発展する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 502,
       "word": "stem",
-      "meaning_ja": null
+      "meaning_ja": "由来する；食い止める；茎",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 503,
       "word": "assert",
-      "meaning_ja": null
+      "meaning_ja": "主張する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 504,
       "word": "implement",
-      "meaning_ja": null
+      "meaning_ja": "実行する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 505,
       "word": "contradict",
-      "meaning_ja": null
+      "meaning_ja": "矛盾する；反論する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 506,
       "word": "convict",
-      "meaning_ja": null
+      "meaning_ja": "有罪判決を下す；受刑者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 507,
       "word": "contend",
-      "meaning_ja": null
+      "meaning_ja": "主張する；争う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 508,
       "word": "sustain",
-      "meaning_ja": null
+      "meaning_ja": "維持する；被る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 509,
       "word": "reproduce",
-      "meaning_ja": null
+      "meaning_ja": "再生する；繁殖する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 510,
       "word": "administer",
-      "meaning_ja": null
+      "meaning_ja": "管理する；投与する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 511,
       "word": "trigger",
-      "meaning_ja": null
+      "meaning_ja": "引き起こす；引き金",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 512,
       "word": "embrace",
-      "meaning_ja": null
+      "meaning_ja": "受け入れる；抱き締める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 513,
       "word": "enforce",
-      "meaning_ja": null
+      "meaning_ja": "施行する；強制する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 514,
       "word": "incorporate",
-      "meaning_ja": null
+      "meaning_ja": "組み込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 515,
       "word": "undergo",
-      "meaning_ja": null
+      "meaning_ja": "経験する；受ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 516,
       "word": "facilitate",
-      "meaning_ja": null
+      "meaning_ja": "促進する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 517,
       "word": "prevail",
-      "meaning_ja": null
+      "meaning_ja": "広く行われる；勝る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 518,
       "word": "enhance",
-      "meaning_ja": null
+      "meaning_ja": "高める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 519,
       "word": "condemn",
-      "meaning_ja": null
+      "meaning_ja": "非難する；刑を宣告する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 520,
       "word": "comprise",
-      "meaning_ja": null
+      "meaning_ja": "含む；構成する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 521,
       "word": "persist",
-      "meaning_ja": null
+      "meaning_ja": "固執する；持続する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 522,
       "word": "defy",
-      "meaning_ja": null
+      "meaning_ja": "逆らう；拒む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 523,
       "word": "retain",
-      "meaning_ja": null
+      "meaning_ja": "保持する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 524,
       "word": "cultivate",
-      "meaning_ja": null
+      "meaning_ja": "耕す；養う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 525,
       "word": "domesticate",
-      "meaning_ja": null
+      "meaning_ja": "家畜化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 526,
       "word": "perish",
-      "meaning_ja": null
+      "meaning_ja": "死ぬ；滅びる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 527,
       "word": "execute",
-      "meaning_ja": null
+      "meaning_ja": "実行する；処刑する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 528,
       "word": "reinforce",
-      "meaning_ja": null
+      "meaning_ja": "強化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 529,
       "word": "assault",
-      "meaning_ja": null
+      "meaning_ja": "襲撃する；暴行",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 530,
       "word": "implant",
-      "meaning_ja": null
+      "meaning_ja": "埋め込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 531,
       "word": "torture",
-      "meaning_ja": null
+      "meaning_ja": "拷問する；拷問",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 532,
       "word": "phenomenon",
-      "meaning_ja": null
+      "meaning_ja": "現象",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 533,
       "word": "perspective",
-      "meaning_ja": null
+      "meaning_ja": "視点；見通し",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 534,
       "word": "trait",
-      "meaning_ja": null
+      "meaning_ja": "特性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 535,
       "word": "proponent",
-      "meaning_ja": null
+      "meaning_ja": "支持者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 536,
       "word": "hypothesis",
-      "meaning_ja": null
+      "meaning_ja": "仮説",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 537,
       "word": "ruling",
-      "meaning_ja": null
+      "meaning_ja": "判決；支配的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 538,
       "word": "ally",
-      "meaning_ja": null
+      "meaning_ja": "同盟国；味方",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 539,
       "word": "tank",
-      "meaning_ja": null
+      "meaning_ja": "戦車；貯蔵槽",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 540,
       "word": "paradigm",
-      "meaning_ja": null
+      "meaning_ja": "典型；思考の枠組み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 541,
       "word": "tactic",
-      "meaning_ja": null
+      "meaning_ja": "戦術",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 542,
       "word": "peasant",
-      "meaning_ja": null
+      "meaning_ja": "農民",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 543,
       "word": "homicide",
-      "meaning_ja": null
+      "meaning_ja": "殺人",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 544,
       "word": "bankruptcy",
-      "meaning_ja": null
+      "meaning_ja": "破産",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 545,
       "word": "juror",
-      "meaning_ja": null
+      "meaning_ja": "陪審員",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 546,
       "word": "predator",
-      "meaning_ja": null
+      "meaning_ja": "捕食者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 547,
       "word": "molecule",
-      "meaning_ja": null
+      "meaning_ja": "分子",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 548,
       "word": "rebellion",
-      "meaning_ja": null
+      "meaning_ja": "反乱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 549,
       "word": "artifact",
-      "meaning_ja": null
+      "meaning_ja": "人工遺物；工芸品",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 550,
       "word": "regime",
-      "meaning_ja": null
+      "meaning_ja": "政権；体制",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 551,
       "word": "accusation",
-      "meaning_ja": null
+      "meaning_ja": "告発；非難",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 552,
       "word": "founder",
-      "meaning_ja": null
+      "meaning_ja": "創設者；沈没する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 553,
       "word": "capitalism",
-      "meaning_ja": null
+      "meaning_ja": "資本主義",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 554,
       "word": "corruption",
-      "meaning_ja": null
+      "meaning_ja": "腐敗；汚職",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 555,
       "word": "conviction",
-      "meaning_ja": null
+      "meaning_ja": "確信；有罪判決",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 556,
       "word": "criterion",
-      "meaning_ja": null
+      "meaning_ja": "基準",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 557,
       "word": "narrative",
-      "meaning_ja": null
+      "meaning_ja": "物語；叙述",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 558,
       "word": "herd",
-      "meaning_ja": null
+      "meaning_ja": "群れ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 559,
       "word": "veteran",
-      "meaning_ja": null
+      "meaning_ja": "熟練者；退役軍人",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 560,
       "word": "incentive",
-      "meaning_ja": null
+      "meaning_ja": "動機；奨励金",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 561,
       "word": "agenda",
-      "meaning_ja": null
+      "meaning_ja": "議題；行動計画",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 562,
       "word": "alliance",
-      "meaning_ja": null
+      "meaning_ja": "同盟",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 563,
       "word": "merit",
-      "meaning_ja": null
+      "meaning_ja": "長所；価値",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 564,
       "word": "sentiment",
-      "meaning_ja": null
+      "meaning_ja": "感情；意見",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 565,
       "word": "reversal",
-      "meaning_ja": null
+      "meaning_ja": "逆転；撤回",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 566,
       "word": "coup",
-      "meaning_ja": null
+      "meaning_ja": "クーデター；大成功",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 567,
       "word": "primate",
-      "meaning_ja": null
+      "meaning_ja": "霊長類",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 568,
       "word": "recipient",
-      "meaning_ja": null
+      "meaning_ja": "受取人",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 569,
       "word": "alteration",
-      "meaning_ja": null
+      "meaning_ja": "変更",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 570,
       "word": "flaw",
-      "meaning_ja": null
+      "meaning_ja": "欠点",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 571,
       "word": "aggression",
-      "meaning_ja": null
+      "meaning_ja": "攻撃性；侵略",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 572,
       "word": "correlation",
-      "meaning_ja": null
+      "meaning_ja": "相関関係",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 573,
       "word": "sediment",
-      "meaning_ja": null
+      "meaning_ja": "堆積物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 574,
       "word": "pathogen",
-      "meaning_ja": null
+      "meaning_ja": "病原体",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 575,
       "word": "compensation",
-      "meaning_ja": null
+      "meaning_ja": "補償；報酬",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 576,
       "word": "monarchy",
-      "meaning_ja": null
+      "meaning_ja": "君主制",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 577,
       "word": "variant",
-      "meaning_ja": null
+      "meaning_ja": "変種",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 578,
       "word": "transition",
-      "meaning_ja": null
+      "meaning_ja": "移行",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 579,
       "word": "expertise",
-      "meaning_ja": null
+      "meaning_ja": "専門知識",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 580,
       "word": "relevance",
-      "meaning_ja": null
+      "meaning_ja": "関連性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 581,
       "word": "sway",
-      "meaning_ja": null
+      "meaning_ja": "揺れる；支配力",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 582,
       "word": "indigenous",
-      "meaning_ja": null
+      "meaning_ja": "先住の；固有の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 583,
       "word": "extinct",
-      "meaning_ja": null
+      "meaning_ja": "絶滅した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 584,
       "word": "subsequent",
-      "meaning_ja": null
+      "meaning_ja": "その後の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 585,
       "word": "colonial",
-      "meaning_ja": null
+      "meaning_ja": "植民地の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 586,
       "word": "distinct",
-      "meaning_ja": null
+      "meaning_ja": "明確に異なる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 587,
       "word": "cognitive",
-      "meaning_ja": null
+      "meaning_ja": "認知の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 588,
       "word": "inevitable",
-      "meaning_ja": null
+      "meaning_ja": "避けられない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 589,
       "word": "inherent",
-      "meaning_ja": null
+      "meaning_ja": "本来備わった",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 590,
       "word": "legitimate",
-      "meaning_ja": null
+      "meaning_ja": "合法的な；正当な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 591,
       "word": "vulnerable",
-      "meaning_ja": null
+      "meaning_ja": "傷つきやすい；脆弱な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 592,
       "word": "skeptical",
-      "meaning_ja": null
+      "meaning_ja": "懐疑的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 593,
       "word": "neural",
-      "meaning_ja": null
+      "meaning_ja": "神経の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 594,
       "word": "prominent",
-      "meaning_ja": null
+      "meaning_ja": "著名な；目立つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 595,
       "word": "collective",
-      "meaning_ja": null
+      "meaning_ja": "集団の；共同の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 596,
       "word": "hostile",
-      "meaning_ja": null
+      "meaning_ja": "敵意のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 597,
       "word": "primitive",
-      "meaning_ja": null
+      "meaning_ja": "原始的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 598,
       "word": "equivalent",
-      "meaning_ja": null
+      "meaning_ja": "同等の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 599,
       "word": "ultimately",
-      "meaning_ja": null
+      "meaning_ja": "最終的に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 600,
       "word": "genetically",
-      "meaning_ja": null
+      "meaning_ja": "遺伝的に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 601,
       "word": "flee",
-      "meaning_ja": null
+      "meaning_ja": "逃げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 602,
       "word": "migrate",
-      "meaning_ja": null
+      "meaning_ja": "移住する；渡る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 603,
       "word": "bind",
-      "meaning_ja": null
+      "meaning_ja": "縛る；結び付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 604,
       "word": "inhibit",
-      "meaning_ja": null
+      "meaning_ja": "抑制する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 605,
       "word": "reside",
-      "meaning_ja": null
+      "meaning_ja": "居住する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 606,
       "word": "transmit",
-      "meaning_ja": null
+      "meaning_ja": "伝達する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 607,
       "word": "dub",
-      "meaning_ja": null
+      "meaning_ja": "名付ける；吹き替える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 608,
       "word": "roam",
-      "meaning_ja": null
+      "meaning_ja": "歩き回る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 609,
       "word": "undertake",
-      "meaning_ja": null
+      "meaning_ja": "引き受ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 610,
       "word": "thrive",
-      "meaning_ja": null
+      "meaning_ja": "繁栄する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 611,
       "word": "halt",
-      "meaning_ja": null
+      "meaning_ja": "停止する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 612,
       "word": "spur",
-      "meaning_ja": null
+      "meaning_ja": "駆り立てる；拍車",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 613,
       "word": "collaborate",
-      "meaning_ja": null
+      "meaning_ja": "協力する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 614,
       "word": "exert",
-      "meaning_ja": null
+      "meaning_ja": "力などを及ぼす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 615,
       "word": "slaughter",
-      "meaning_ja": null
+      "meaning_ja": "虐殺する；屠殺する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 616,
       "word": "allocate",
-      "meaning_ja": null
+      "meaning_ja": "割り当てる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 617,
       "word": "enact",
-      "meaning_ja": null
+      "meaning_ja": "制定する；演じる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 618,
       "word": "encompass",
-      "meaning_ja": null
+      "meaning_ja": "包含する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 619,
       "word": "hail",
-      "meaning_ja": null
+      "meaning_ja": "称賛する；雹",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 620,
       "word": "unearth",
-      "meaning_ja": null
+      "meaning_ja": "発掘する；明るみに出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 621,
       "word": "devastate",
-      "meaning_ja": null
+      "meaning_ja": "壊滅させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 622,
       "word": "skyrocket",
-      "meaning_ja": null
+      "meaning_ja": "急上昇する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 623,
       "word": "accelerate",
-      "meaning_ja": null
+      "meaning_ja": "加速する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 624,
       "word": "uphold",
-      "meaning_ja": null
+      "meaning_ja": "支持する；維持する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 625,
       "word": "initiate",
-      "meaning_ja": null
+      "meaning_ja": "開始する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 626,
       "word": "ravage",
-      "meaning_ja": null
+      "meaning_ja": "荒廃させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 627,
       "word": "suppress",
-      "meaning_ja": null
+      "meaning_ja": "抑圧する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 628,
       "word": "displace",
-      "meaning_ja": null
+      "meaning_ja": "移動させる；取って代わる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 629,
       "word": "subordinate",
-      "meaning_ja": null
+      "meaning_ja": "下位の；部下",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 630,
       "word": "supplement",
-      "meaning_ja": null
+      "meaning_ja": "補足する；補足",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 631,
       "word": "revolt",
-      "meaning_ja": null
+      "meaning_ja": "反乱；反抗する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 632,
       "word": "asteroid",
-      "meaning_ja": null
+      "meaning_ja": "小惑星",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 633,
       "word": "rodent",
-      "meaning_ja": null
+      "meaning_ja": "齧歯類",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 634,
       "word": "resurrection",
-      "meaning_ja": null
+      "meaning_ja": "復活",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 635,
       "word": "inmate",
-      "meaning_ja": null
+      "meaning_ja": "収容者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 636,
       "word": "pest",
-      "meaning_ja": null
+      "meaning_ja": "害虫",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 637,
       "word": "awe",
-      "meaning_ja": null
+      "meaning_ja": "畏敬",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 638,
       "word": "scope",
-      "meaning_ja": null
+      "meaning_ja": "範囲；余地",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 639,
       "word": "privilege",
-      "meaning_ja": null
+      "meaning_ja": "特権",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 640,
       "word": "censorship",
-      "meaning_ja": null
+      "meaning_ja": "検閲",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 641,
       "word": "descendant",
-      "meaning_ja": null
+      "meaning_ja": "子孫",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 642,
       "word": "drought",
-      "meaning_ja": null
+      "meaning_ja": "干ばつ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 643,
       "word": "methane",
-      "meaning_ja": null
+      "meaning_ja": "メタン",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 644,
       "word": "misdemeanor",
-      "meaning_ja": null
+      "meaning_ja": "軽犯罪",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 645,
       "word": "obstetrician",
-      "meaning_ja": null
+      "meaning_ja": "産科医",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 646,
       "word": "credibility",
-      "meaning_ja": null
+      "meaning_ja": "信頼性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 647,
       "word": "prestige",
-      "meaning_ja": null
+      "meaning_ja": "名声",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 648,
       "word": "optimism",
-      "meaning_ja": null
+      "meaning_ja": "楽観主義",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 649,
       "word": "hierarchy",
-      "meaning_ja": null
+      "meaning_ja": "階層構造",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 650,
       "word": "preservation",
-      "meaning_ja": null
+      "meaning_ja": "保存",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 651,
       "word": "rivalry",
-      "meaning_ja": null
+      "meaning_ja": "競争関係",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 652,
       "word": "practitioner",
-      "meaning_ja": null
+      "meaning_ja": "実務家；開業医",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 653,
       "word": "habitat",
-      "meaning_ja": null
+      "meaning_ja": "生息地",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 654,
       "word": "tenure",
-      "meaning_ja": null
+      "meaning_ja": "在職期間；終身在職権",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 655,
       "word": "brutality",
-      "meaning_ja": null
+      "meaning_ja": "残虐性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 656,
       "word": "aftermath",
-      "meaning_ja": null
+      "meaning_ja": "余波",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 657,
       "word": "unrest",
-      "meaning_ja": null
+      "meaning_ja": "不安；騒乱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 658,
       "word": "coalition",
-      "meaning_ja": null
+      "meaning_ja": "連立；連合",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 659,
       "word": "irrigation",
-      "meaning_ja": null
+      "meaning_ja": "灌漑",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 660,
       "word": "commodity",
-      "meaning_ja": null
+      "meaning_ja": "商品；日用品",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 661,
       "word": "dominance",
-      "meaning_ja": null
+      "meaning_ja": "優位；支配",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 662,
       "word": "backlash",
-      "meaning_ja": null
+      "meaning_ja": "反発",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 663,
       "word": "surge",
-      "meaning_ja": null
+      "meaning_ja": "急増；殺到する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 664,
       "word": "norm",
-      "meaning_ja": null
+      "meaning_ja": "標準；規範",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 665,
       "word": "catastrophe",
-      "meaning_ja": null
+      "meaning_ja": "大惨事",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 666,
       "word": "resentment",
-      "meaning_ja": null
+      "meaning_ja": "憤り",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 667,
       "word": "toll",
-      "meaning_ja": null
+      "meaning_ja": "犠牲者数；通行料",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 668,
       "word": "asset",
-      "meaning_ja": null
+      "meaning_ja": "資産；強み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 669,
       "word": "microbe",
-      "meaning_ja": null
+      "meaning_ja": "微生物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 670,
       "word": "severity",
-      "meaning_ja": null
+      "meaning_ja": "深刻さ；厳しさ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 671,
       "word": "diagnosis",
-      "meaning_ja": null
+      "meaning_ja": "診断",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 672,
       "word": "nobility",
-      "meaning_ja": null
+      "meaning_ja": "貴族；高潔さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 673,
       "word": "militia",
-      "meaning_ja": null
+      "meaning_ja": "民兵",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 674,
       "word": "clergy",
-      "meaning_ja": null
+      "meaning_ja": "聖職者たち",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 675,
       "word": "reservoir",
-      "meaning_ja": null
+      "meaning_ja": "貯水池",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 676,
       "word": "upheaval",
-      "meaning_ja": null
+      "meaning_ja": "激変；大混乱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 677,
       "word": "neutrality",
-      "meaning_ja": null
+      "meaning_ja": "中立",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 678,
       "word": "array",
-      "meaning_ja": null
+      "meaning_ja": "配列；多種多様なもの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 679,
       "word": "duration",
-      "meaning_ja": null
+      "meaning_ja": "期間",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 680,
       "word": "collision",
-      "meaning_ja": null
+      "meaning_ja": "衝突",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 681,
       "word": "lapse",
-      "meaning_ja": null
+      "meaning_ja": "過失；失効する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 682,
       "word": "raid",
-      "meaning_ja": null
+      "meaning_ja": "急襲；手入れ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 683,
       "word": "captive",
-      "meaning_ja": null
+      "meaning_ja": "捕虜；捕らわれた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 684,
       "word": "compelling",
-      "meaning_ja": null
+      "meaning_ja": "説得力のある；心を引く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 685,
       "word": "strategic",
-      "meaning_ja": null
+      "meaning_ja": "戦略上の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 686,
       "word": "extraterrestrial",
-      "meaning_ja": null
+      "meaning_ja": "地球外の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 687,
       "word": "comprehensive",
-      "meaning_ja": null
+      "meaning_ja": "包括的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 688,
       "word": "unprecedented",
-      "meaning_ja": null
+      "meaning_ja": "前例のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 689,
       "word": "sole",
-      "meaning_ja": null
+      "meaning_ja": "唯一の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 690,
       "word": "ethical",
-      "meaning_ja": null
+      "meaning_ja": "倫理的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 691,
       "word": "negligible",
-      "meaning_ja": null
+      "meaning_ja": "無視できるほど小さい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 692,
       "word": "agrarian",
-      "meaning_ja": null
+      "meaning_ja": "農業の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 693,
       "word": "notable",
-      "meaning_ja": null
+      "meaning_ja": "注目すべき",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 694,
       "word": "indispensable",
-      "meaning_ja": null
+      "meaning_ja": "不可欠な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 695,
       "word": "irrelevant",
-      "meaning_ja": null
+      "meaning_ja": "無関係な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 696,
       "word": "outright",
-      "meaning_ja": null
+      "meaning_ja": "完全な；あからさまな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 697,
       "word": "drastic",
-      "meaning_ja": null
+      "meaning_ja": "抜本的な；急激な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 698,
       "word": "fragile",
-      "meaning_ja": null
+      "meaning_ja": "壊れやすい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 699,
       "word": "judicial",
-      "meaning_ja": null
+      "meaning_ja": "司法の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 700,
       "word": "albeit",
-      "meaning_ja": null
+      "meaning_ja": "とはいえ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 701,
       "word": "enlighten",
-      "meaning_ja": null
+      "meaning_ja": "啓発する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 702,
       "word": "detest",
-      "meaning_ja": null
+      "meaning_ja": "ひどく嫌う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 703,
       "word": "revitalize",
-      "meaning_ja": null
+      "meaning_ja": "活性化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 704,
       "word": "coerce",
-      "meaning_ja": null
+      "meaning_ja": "強要する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 705,
       "word": "elicit",
-      "meaning_ja": null
+      "meaning_ja": "引き出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 706,
       "word": "rumble",
-      "meaning_ja": null
+      "meaning_ja": "ごろごろ鳴る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 707,
       "word": "mar",
-      "meaning_ja": null
+      "meaning_ja": "損なう",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 708,
       "word": "litigate",
-      "meaning_ja": null
+      "meaning_ja": "訴訟を起こす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 709,
       "word": "reinstate",
-      "meaning_ja": null
+      "meaning_ja": "復職させる；復活させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 710,
       "word": "congregate",
-      "meaning_ja": null
+      "meaning_ja": "集合する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 711,
       "word": "evade",
-      "meaning_ja": null
+      "meaning_ja": "逃れる；はぐらかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 712,
       "word": "replicate",
-      "meaning_ja": null
+      "meaning_ja": "複製する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 713,
       "word": "contravene",
-      "meaning_ja": null
+      "meaning_ja": "違反する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 714,
       "word": "extort",
-      "meaning_ja": null
+      "meaning_ja": "ゆすり取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 715,
       "word": "forgo",
-      "meaning_ja": null
+      "meaning_ja": "なしで済ませる；断念する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 716,
       "word": "stammer",
-      "meaning_ja": null
+      "meaning_ja": "どもる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 717,
       "word": "dupe",
-      "meaning_ja": null
+      "meaning_ja": "だます；だまされやすい人",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 718,
       "word": "pounce",
-      "meaning_ja": null
+      "meaning_ja": "飛びかかる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 719,
       "word": "deride",
-      "meaning_ja": null
+      "meaning_ja": "嘲笑する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 720,
       "word": "swindle",
-      "meaning_ja": null
+      "meaning_ja": "だまし取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 721,
       "word": "condone",
-      "meaning_ja": null
+      "meaning_ja": "大目に見る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 722,
       "word": "decry",
-      "meaning_ja": null
+      "meaning_ja": "公然と非難する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 723,
       "word": "indulge",
-      "meaning_ja": null
+      "meaning_ja": "欲望を満たす；甘やかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 724,
       "word": "abdicate",
-      "meaning_ja": null
+      "meaning_ja": "退位する；放棄する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 725,
       "word": "bluff",
-      "meaning_ja": null
+      "meaning_ja": "はったり；はったりをかける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 726,
       "word": "nullify",
-      "meaning_ja": null
+      "meaning_ja": "無効にする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 727,
       "word": "propagate",
-      "meaning_ja": null
+      "meaning_ja": "広める；繁殖させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 728,
       "word": "proliferate",
-      "meaning_ja": null
+      "meaning_ja": "急増する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 729,
       "word": "repatriate",
-      "meaning_ja": null
+      "meaning_ja": "本国へ送還する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 730,
       "word": "canvass",
-      "meaning_ja": null
+      "meaning_ja": "支持を求めて回る；調査する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 731,
       "word": "falter",
-      "meaning_ja": null
+      "meaning_ja": "ためらう；勢いが衰える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 732,
       "word": "flaunt",
-      "meaning_ja": null
+      "meaning_ja": "見せびらかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 733,
       "word": "cringe",
-      "meaning_ja": null
+      "meaning_ja": "すくむ；へつらう",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 734,
       "word": "appraise",
-      "meaning_ja": null
+      "meaning_ja": "評価する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 735,
       "word": "adjourn",
-      "meaning_ja": null
+      "meaning_ja": "休会する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 736,
       "word": "clench",
-      "meaning_ja": null
+      "meaning_ja": "握り締める；食いしばる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 737,
       "word": "defraud",
-      "meaning_ja": null
+      "meaning_ja": "だまし取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 738,
       "word": "regurgitate",
-      "meaning_ja": null
+      "meaning_ja": "吐き戻す；丸暗記したことを繰り返す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 739,
       "word": "ensconce",
-      "meaning_ja": null
+      "meaning_ja": "落ち着かせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 740,
       "word": "calibrate",
-      "meaning_ja": null
+      "meaning_ja": "目盛りを調整する；校正する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 741,
       "word": "botch",
-      "meaning_ja": null
+      "meaning_ja": "しくじる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 742,
       "word": "reprieve",
-      "meaning_ja": null
+      "meaning_ja": "刑の執行猶予；一時的な救済",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 743,
       "word": "mock",
-      "meaning_ja": null
+      "meaning_ja": "あざける；模擬の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 744,
       "word": "hoax",
-      "meaning_ja": null
+      "meaning_ja": "でっち上げ；いたずら",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 745,
       "word": "juncture",
-      "meaning_ja": null
+      "meaning_ja": "時点；重大な局面",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 746,
       "word": "agility",
-      "meaning_ja": null
+      "meaning_ja": "敏捷さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 747,
       "word": "dearth",
-      "meaning_ja": null
+      "meaning_ja": "不足",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 748,
       "word": "libel",
-      "meaning_ja": null
+      "meaning_ja": "文書による名誉毀損",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 749,
       "word": "crux",
-      "meaning_ja": null
+      "meaning_ja": "核心",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 750,
       "word": "audacity",
-      "meaning_ja": null
+      "meaning_ja": "大胆さ；厚かましさ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 751,
       "word": "diversion",
-      "meaning_ja": null
+      "meaning_ja": "気晴らし；迂回",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 752,
       "word": "leeway",
-      "meaning_ja": null
+      "meaning_ja": "裁量の余地",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 753,
       "word": "conscription",
-      "meaning_ja": null
+      "meaning_ja": "徴兵",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 754,
       "word": "protocol",
-      "meaning_ja": null
+      "meaning_ja": "議定書；手順",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 755,
       "word": "memento",
-      "meaning_ja": null
+      "meaning_ja": "記念品",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 756,
       "word": "banter",
-      "meaning_ja": null
+      "meaning_ja": "気さくな冗談",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 757,
       "word": "onus",
-      "meaning_ja": null
+      "meaning_ja": "責任；負担",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 758,
       "word": "levity",
-      "meaning_ja": null
+      "meaning_ja": "軽率さ；不真面目さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 759,
       "word": "rehash",
-      "meaning_ja": null
+      "meaning_ja": "焼き直し；焼き直す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 760,
       "word": "constellation",
-      "meaning_ja": null
+      "meaning_ja": "星座",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 761,
       "word": "extrovert",
-      "meaning_ja": null
+      "meaning_ja": "外向的な人",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 762,
       "word": "allegiance",
-      "meaning_ja": null
+      "meaning_ja": "忠誠",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 763,
       "word": "placebo",
-      "meaning_ja": null
+      "meaning_ja": "偽薬",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 764,
       "word": "envoy",
-      "meaning_ja": null
+      "meaning_ja": "使節",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 765,
       "word": "slur",
-      "meaning_ja": null
+      "meaning_ja": "中傷；不明瞭に発音する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 766,
       "word": "collateral",
-      "meaning_ja": null
+      "meaning_ja": "担保；付随的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 767,
       "word": "zeal",
-      "meaning_ja": null
+      "meaning_ja": "熱意",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 768,
       "word": "defiance",
-      "meaning_ja": null
+      "meaning_ja": "反抗",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 769,
       "word": "mutiny",
-      "meaning_ja": null
+      "meaning_ja": "反乱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 770,
       "word": "spate",
-      "meaning_ja": null
+      "meaning_ja": "多発；続発",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 771,
       "word": "bravado",
-      "meaning_ja": null
+      "meaning_ja": "虚勢",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 772,
       "word": "ebb",
-      "meaning_ja": null
+      "meaning_ja": "引き潮；衰退",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 773,
       "word": "proviso",
-      "meaning_ja": null
+      "meaning_ja": "但し書き",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 774,
       "word": "antiseptic",
-      "meaning_ja": null
+      "meaning_ja": "消毒薬；防腐の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 775,
       "word": "copious",
-      "meaning_ja": null
+      "meaning_ja": "豊富な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 776,
       "word": "eminent",
-      "meaning_ja": null
+      "meaning_ja": "著名な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 777,
       "word": "pervasive",
-      "meaning_ja": null
+      "meaning_ja": "広く行き渡った",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 778,
       "word": "meager",
-      "meaning_ja": null
+      "meaning_ja": "乏しい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 779,
       "word": "impeccable",
-      "meaning_ja": null
+      "meaning_ja": "非の打ち所のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 780,
       "word": "susceptible",
-      "meaning_ja": null
+      "meaning_ja": "影響を受けやすい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 781,
       "word": "lanky",
-      "meaning_ja": null
+      "meaning_ja": "ひょろ長い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 782,
       "word": "stringent",
-      "meaning_ja": null
+      "meaning_ja": "厳格な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 783,
       "word": "viable",
-      "meaning_ja": null
+      "meaning_ja": "実行可能な；存続可能な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 784,
       "word": "fraught",
-      "meaning_ja": null
+      "meaning_ja": "困難などを伴う；緊迫した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 785,
       "word": "probationary",
-      "meaning_ja": null
+      "meaning_ja": "試用の；保護観察の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 786,
       "word": "translucent",
-      "meaning_ja": null
+      "meaning_ja": "半透明の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 787,
       "word": "dogmatic",
-      "meaning_ja": null
+      "meaning_ja": "独断的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 788,
       "word": "nomadic",
-      "meaning_ja": null
+      "meaning_ja": "遊牧の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 789,
       "word": "oblique",
-      "meaning_ja": null
+      "meaning_ja": "斜めの；遠回しの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 790,
       "word": "tactful",
-      "meaning_ja": null
+      "meaning_ja": "機転の利く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 791,
       "word": "aboveboard",
-      "meaning_ja": null
+      "meaning_ja": "公明正大な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 792,
       "word": "queasy",
-      "meaning_ja": null
+      "meaning_ja": "吐き気のする；不安な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 793,
       "word": "boisterous",
-      "meaning_ja": null
+      "meaning_ja": "騒々しい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 794,
       "word": "impromptu",
-      "meaning_ja": null
+      "meaning_ja": "即興の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 795,
       "word": "profuse",
-      "meaning_ja": null
+      "meaning_ja": "豊富な；多量の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 796,
       "word": "venomous",
-      "meaning_ja": null
+      "meaning_ja": "有毒な；悪意に満ちた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 797,
       "word": "quizzical",
-      "meaning_ja": null
+      "meaning_ja": "いぶかしげな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 798,
       "word": "momentous",
-      "meaning_ja": null
+      "meaning_ja": "重大な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 799,
       "word": "adjunct",
-      "meaning_ja": null
+      "meaning_ja": "付属物；補助の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 800,
       "word": "posthumously",
-      "meaning_ja": null
+      "meaning_ja": "死後に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 801,
       "word": "conciliate",
-      "meaning_ja": null
+      "meaning_ja": "なだめる；和解させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 802,
       "word": "squirm",
-      "meaning_ja": null
+      "meaning_ja": "身をよじる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 803,
       "word": "elucidate",
-      "meaning_ja": null
+      "meaning_ja": "明らかにする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 804,
       "word": "chastise",
-      "meaning_ja": null
+      "meaning_ja": "厳しく叱る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 805,
       "word": "slouch",
-      "meaning_ja": null
+      "meaning_ja": "前かがみになる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 806,
       "word": "goad",
-      "meaning_ja": null
+      "meaning_ja": "けしかける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 807,
       "word": "scamper",
-      "meaning_ja": null
+      "meaning_ja": "駆け回る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 808,
       "word": "wade",
-      "meaning_ja": null
+      "meaning_ja": "水の中を歩く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 809,
       "word": "teem",
-      "meaning_ja": null
+      "meaning_ja": "満ちている；群がる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 810,
       "word": "wilt",
-      "meaning_ja": null
+      "meaning_ja": "しおれる；気力を失う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 811,
       "word": "wager",
-      "meaning_ja": null
+      "meaning_ja": "賭ける；賭け",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 812,
       "word": "delve",
-      "meaning_ja": null
+      "meaning_ja": "詳しく調べる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 813,
       "word": "smuggle",
-      "meaning_ja": null
+      "meaning_ja": "密輸する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 814,
       "word": "dazzle",
-      "meaning_ja": null
+      "meaning_ja": "まぶしくする；感嘆させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 815,
       "word": "diminish",
-      "meaning_ja": null
+      "meaning_ja": "減少する；弱める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 816,
       "word": "ponder",
-      "meaning_ja": null
+      "meaning_ja": "熟考する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 817,
       "word": "orchestrate",
-      "meaning_ja": null
+      "meaning_ja": "巧みに組織する；編曲する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 818,
       "word": "encroach",
-      "meaning_ja": null
+      "meaning_ja": "侵入する；侵害する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 819,
       "word": "negate",
-      "meaning_ja": null
+      "meaning_ja": "否定する；無効にする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 820,
       "word": "expedite",
-      "meaning_ja": null
+      "meaning_ja": "迅速に進める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 821,
       "word": "enunciate",
-      "meaning_ja": null
+      "meaning_ja": "明瞭に発音する；明言する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 822,
       "word": "dissect",
-      "meaning_ja": null
+      "meaning_ja": "解剖する；詳細に分析する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 823,
       "word": "insulate",
-      "meaning_ja": null
+      "meaning_ja": "絶縁する；隔離する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 824,
       "word": "avert",
-      "meaning_ja": null
+      "meaning_ja": "回避する；そらす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 825,
       "word": "deter",
-      "meaning_ja": null
+      "meaning_ja": "思いとどまらせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 826,
       "word": "juggle",
-      "meaning_ja": null
+      "meaning_ja": "複数のことをやりくりする；曲芸で操る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 827,
       "word": "slam",
-      "meaning_ja": null
+      "meaning_ja": "激しく閉める；酷評する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 828,
       "word": "mutter",
-      "meaning_ja": null
+      "meaning_ja": "つぶやく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 829,
       "word": "stunt",
-      "meaning_ja": null
+      "meaning_ja": "発育を妨げる；離れ業",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 830,
       "word": "redress",
-      "meaning_ja": null
+      "meaning_ja": "是正する；救済",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 831,
       "word": "deposition",
-      "meaning_ja": null
+      "meaning_ja": "宣誓証言；堆積；免職",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 832,
       "word": "vanity",
-      "meaning_ja": null
+      "meaning_ja": "虚栄心；むなしさ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 833,
       "word": "altercation",
-      "meaning_ja": null
+      "meaning_ja": "口論",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 834,
       "word": "stupor",
-      "meaning_ja": null
+      "meaning_ja": "昏迷；意識がもうろうとした状態",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 835,
       "word": "bane",
-      "meaning_ja": null
+      "meaning_ja": "悩みの種",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 836,
       "word": "snag",
-      "meaning_ja": null
+      "meaning_ja": "障害；引っかける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 837,
       "word": "pariah",
-      "meaning_ja": null
+      "meaning_ja": "のけ者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 838,
       "word": "omen",
-      "meaning_ja": null
+      "meaning_ja": "前兆",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 839,
       "word": "forgery",
-      "meaning_ja": null
+      "meaning_ja": "偽造；偽造品",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 840,
       "word": "precedent",
-      "meaning_ja": null
+      "meaning_ja": "先例",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 841,
       "word": "longevity",
-      "meaning_ja": null
+      "meaning_ja": "長寿",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 842,
       "word": "momentum",
-      "meaning_ja": null
+      "meaning_ja": "勢い；運動量",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 843,
       "word": "plight",
-      "meaning_ja": null
+      "meaning_ja": "窮状",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 844,
       "word": "vandalism",
-      "meaning_ja": null
+      "meaning_ja": "公共物を故意に壊す行為",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 845,
       "word": "demolition",
-      "meaning_ja": null
+      "meaning_ja": "取り壊し",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 846,
       "word": "maneuver",
-      "meaning_ja": null
+      "meaning_ja": "巧みな操作；策略",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 847,
       "word": "precipitation",
-      "meaning_ja": null
+      "meaning_ja": "降水；沈殿",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 848,
       "word": "obscurity",
-      "meaning_ja": null
+      "meaning_ja": "無名；不明瞭さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 849,
       "word": "jest",
-      "meaning_ja": null
+      "meaning_ja": "冗談",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 850,
       "word": "hype",
-      "meaning_ja": null
+      "meaning_ja": "誇大宣伝",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 851,
       "word": "deportation",
-      "meaning_ja": null
+      "meaning_ja": "国外追放",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 852,
       "word": "faction",
-      "meaning_ja": null
+      "meaning_ja": "派閥",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 853,
       "word": "onset",
-      "meaning_ja": null
+      "meaning_ja": "始まり；発症",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 854,
       "word": "proximity",
-      "meaning_ja": null
+      "meaning_ja": "近接",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 855,
       "word": "blister",
-      "meaning_ja": null
+      "meaning_ja": "水ぶくれ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 856,
       "word": "ordinance",
-      "meaning_ja": null
+      "meaning_ja": "条例；命令",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 857,
       "word": "disparity",
-      "meaning_ja": null
+      "meaning_ja": "格差",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 858,
       "word": "provision",
-      "meaning_ja": null
+      "meaning_ja": "供給；条項；備え",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 859,
       "word": "curfew",
-      "meaning_ja": null
+      "meaning_ja": "外出禁止令；門限",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 860,
       "word": "verdict",
-      "meaning_ja": null
+      "meaning_ja": "評決",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 861,
       "word": "counterfeit",
-      "meaning_ja": null
+      "meaning_ja": "偽造の；偽造する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 862,
       "word": "strand",
-      "meaning_ja": null
+      "meaning_ja": "立ち往生させる；糸；一要素",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 863,
       "word": "prudent",
-      "meaning_ja": null
+      "meaning_ja": "慎重な；賢明な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 864,
       "word": "concerted",
-      "meaning_ja": null
+      "meaning_ja": "一致協力した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 865,
       "word": "uncanny",
-      "meaning_ja": null
+      "meaning_ja": "不気味な；不思議な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 866,
       "word": "awry",
-      "meaning_ja": null
+      "meaning_ja": "ゆがんで；計画が狂って",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 867,
       "word": "plenary",
-      "meaning_ja": null
+      "meaning_ja": "全員出席の；完全な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 868,
       "word": "complacent",
-      "meaning_ja": null
+      "meaning_ja": "自己満足した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 869,
       "word": "desolate",
-      "meaning_ja": null
+      "meaning_ja": "荒涼とした；孤独な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 870,
       "word": "livid",
-      "meaning_ja": null
+      "meaning_ja": "激怒した；青黒い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 871,
       "word": "tacit",
-      "meaning_ja": null
+      "meaning_ja": "暗黙の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 872,
       "word": "fraudulent",
-      "meaning_ja": null
+      "meaning_ja": "詐欺的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 873,
       "word": "wayward",
-      "meaning_ja": null
+      "meaning_ja": "わがままな；気まぐれな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 874,
       "word": "convoluted",
-      "meaning_ja": null
+      "meaning_ja": "複雑で分かりにくい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 875,
       "word": "harrowing",
-      "meaning_ja": null
+      "meaning_ja": "痛ましい；つらい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 876,
       "word": "explicit",
-      "meaning_ja": null
+      "meaning_ja": "明白な；露骨な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 877,
       "word": "lethal",
-      "meaning_ja": null
+      "meaning_ja": "致命的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 878,
       "word": "feasible",
-      "meaning_ja": null
+      "meaning_ja": "実行可能な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 879,
       "word": "adjacent",
-      "meaning_ja": null
+      "meaning_ja": "隣接した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 880,
       "word": "relentless",
-      "meaning_ja": null
+      "meaning_ja": "容赦のない；絶え間ない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 881,
       "word": "devoid",
-      "meaning_ja": null
+      "meaning_ja": "欠いている",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 882,
       "word": "cohesive",
-      "meaning_ja": null
+      "meaning_ja": "結束した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 883,
       "word": "forensic",
-      "meaning_ja": null
+      "meaning_ja": "法医学の；犯罪科学の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 884,
       "word": "arcane",
-      "meaning_ja": null
+      "meaning_ja": "難解な；秘伝の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 885,
       "word": "tentative",
-      "meaning_ja": null
+      "meaning_ja": "暫定的な；ためらいがちな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 886,
       "word": "assiduous",
-      "meaning_ja": null
+      "meaning_ja": "勤勉な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 887,
       "word": "cumulative",
-      "meaning_ja": null
+      "meaning_ja": "累積する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 888,
       "word": "conspicuous",
-      "meaning_ja": null
+      "meaning_ja": "目立つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 889,
       "word": "resilient",
-      "meaning_ja": null
+      "meaning_ja": "回復力のある；弾力のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 890,
       "word": "alleged",
-      "meaning_ja": null
+      "meaning_ja": "申し立てられた；疑いのある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 891,
       "word": "optimum",
-      "meaning_ja": null
+      "meaning_ja": "最適の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 892,
       "word": "frantic",
-      "meaning_ja": null
+      "meaning_ja": "必死の；取り乱した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 893,
       "word": "turbulent",
-      "meaning_ja": null
+      "meaning_ja": "激動の；荒れた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 894,
       "word": "arid",
-      "meaning_ja": null
+      "meaning_ja": "乾燥した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 895,
       "word": "laudable",
-      "meaning_ja": null
+      "meaning_ja": "称賛に値する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 896,
       "word": "ubiquitous",
-      "meaning_ja": null
+      "meaning_ja": "至る所にある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 897,
       "word": "covert",
-      "meaning_ja": null
+      "meaning_ja": "秘密の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 898,
       "word": "subdued",
-      "meaning_ja": null
+      "meaning_ja": "抑えた；落ち着いた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 899,
       "word": "dissident",
-      "meaning_ja": null
+      "meaning_ja": "反体制派の；反対者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 900,
       "word": "brusquely",
-      "meaning_ja": null
+      "meaning_ja": "ぶっきらぼうに",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 901,
       "word": "decipher",
-      "meaning_ja": null
+      "meaning_ja": "解読する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 902,
       "word": "sprout",
-      "meaning_ja": null
+      "meaning_ja": "芽を出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 903,
       "word": "temper",
-      "meaning_ja": null
+      "meaning_ja": "和らげる；気性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 904,
       "word": "assail",
-      "meaning_ja": null
+      "meaning_ja": "襲う；激しく非難する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 905,
       "word": "preclude",
-      "meaning_ja": null
+      "meaning_ja": "不可能にする；排除する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 906,
       "word": "relish",
-      "meaning_ja": null
+      "meaning_ja": "楽しむ；風味",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 907,
       "word": "waive",
-      "meaning_ja": null
+      "meaning_ja": "権利などを放棄する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 908,
       "word": "spearhead",
-      "meaning_ja": null
+      "meaning_ja": "先頭に立つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 909,
       "word": "infringe",
-      "meaning_ja": null
+      "meaning_ja": "侵害する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 910,
       "word": "abort",
-      "meaning_ja": null
+      "meaning_ja": "中止する；中絶する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 911,
       "word": "balk",
-      "meaning_ja": null
+      "meaning_ja": "ためらう；拒む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 912,
       "word": "underscore",
-      "meaning_ja": null
+      "meaning_ja": "強調する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 913,
       "word": "haggle",
-      "meaning_ja": null
+      "meaning_ja": "値切る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 914,
       "word": "repeal",
-      "meaning_ja": null
+      "meaning_ja": "廃止する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 915,
       "word": "scuttle",
-      "meaning_ja": null
+      "meaning_ja": "小走りする；計画を潰す；船を沈める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 916,
       "word": "confound",
-      "meaning_ja": null
+      "meaning_ja": "困惑させる；覆す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 917,
       "word": "unravel",
-      "meaning_ja": null
+      "meaning_ja": "解きほぐす；解明する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 918,
       "word": "aggravate",
-      "meaning_ja": null
+      "meaning_ja": "悪化させる；いら立たせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 919,
       "word": "detonate",
-      "meaning_ja": null
+      "meaning_ja": "爆発させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 920,
       "word": "hurtle",
-      "meaning_ja": null
+      "meaning_ja": "猛スピードで進む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 921,
       "word": "stump",
-      "meaning_ja": null
+      "meaning_ja": "困らせる；切り株",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 922,
       "word": "delegate",
-      "meaning_ja": null
+      "meaning_ja": "委任する；代表者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 923,
       "word": "repulse",
-      "meaning_ja": null
+      "meaning_ja": "撃退する；嫌悪させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 924,
       "word": "affix",
-      "meaning_ja": null
+      "meaning_ja": "貼り付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 925,
       "word": "afflict",
-      "meaning_ja": null
+      "meaning_ja": "苦しめる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 926,
       "word": "perspire",
-      "meaning_ja": null
+      "meaning_ja": "汗をかく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 927,
       "word": "protrude",
-      "meaning_ja": null
+      "meaning_ja": "突き出る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 928,
       "word": "verify",
-      "meaning_ja": null
+      "meaning_ja": "確かめる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 929,
       "word": "chant",
-      "meaning_ja": null
+      "meaning_ja": "繰り返し唱える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 930,
       "word": "careen",
-      "meaning_ja": null
+      "meaning_ja": "傾きながら疾走する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 931,
       "word": "sever",
-      "meaning_ja": null
+      "meaning_ja": "切断する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 932,
       "word": "abet",
-      "meaning_ja": null
+      "meaning_ja": "犯罪をそそのかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 933,
       "word": "gauge",
-      "meaning_ja": null
+      "meaning_ja": "測定する；計器",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 934,
       "word": "embed",
-      "meaning_ja": null
+      "meaning_ja": "埋め込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 935,
       "word": "restraint",
-      "meaning_ja": null
+      "meaning_ja": "抑制；拘束",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 936,
       "word": "qualm",
-      "meaning_ja": null
+      "meaning_ja": "不安；良心のとがめ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 937,
       "word": "complicity",
-      "meaning_ja": null
+      "meaning_ja": "共謀",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 938,
       "word": "insurgency",
-      "meaning_ja": null
+      "meaning_ja": "反乱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 939,
       "word": "premise",
-      "meaning_ja": null
+      "meaning_ja": "前提",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 940,
       "word": "anomaly",
-      "meaning_ja": null
+      "meaning_ja": "異常；例外",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 941,
       "word": "upshot",
-      "meaning_ja": null
+      "meaning_ja": "結末",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 942,
       "word": "strain",
-      "meaning_ja": null
+      "meaning_ja": "負担；緊張；系統",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 943,
       "word": "pitfall",
-      "meaning_ja": null
+      "meaning_ja": "落とし穴",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 944,
       "word": "aptitude",
-      "meaning_ja": null
+      "meaning_ja": "適性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 945,
       "word": "indiscretion",
-      "meaning_ja": null
+      "meaning_ja": "軽率な言動",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 946,
       "word": "liability",
-      "meaning_ja": null
+      "meaning_ja": "責任；負債；不利なもの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 947,
       "word": "grudge",
-      "meaning_ja": null
+      "meaning_ja": "恨み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 948,
       "word": "jeopardy",
-      "meaning_ja": null
+      "meaning_ja": "危険",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 949,
       "word": "amnesty",
-      "meaning_ja": null
+      "meaning_ja": "恩赦",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 950,
       "word": "consignment",
-      "meaning_ja": null
+      "meaning_ja": "委託貨物；発送",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 951,
       "word": "haven",
-      "meaning_ja": null
+      "meaning_ja": "避難場所",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 952,
       "word": "novice",
-      "meaning_ja": null
+      "meaning_ja": "初心者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 953,
       "word": "benevolence",
-      "meaning_ja": null
+      "meaning_ja": "慈悲；善意",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 954,
       "word": "deliberation",
-      "meaning_ja": null
+      "meaning_ja": "熟考；審議",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 955,
       "word": "avalanche",
-      "meaning_ja": null
+      "meaning_ja": "雪崩；殺到",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 956,
       "word": "eviction",
-      "meaning_ja": null
+      "meaning_ja": "立ち退き",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 957,
       "word": "adversary",
-      "meaning_ja": null
+      "meaning_ja": "敵対者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 958,
       "word": "testament",
-      "meaning_ja": null
+      "meaning_ja": "証拠；遺言",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 959,
       "word": "commune",
-      "meaning_ja": null
+      "meaning_ja": "共同体；心を通わせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 960,
       "word": "fixture",
-      "meaning_ja": null
+      "meaning_ja": "固定設備；常連",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 961,
       "word": "installment",
-      "meaning_ja": null
+      "meaning_ja": "分割払いの1回分；連載の1回分",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 962,
       "word": "depreciation",
-      "meaning_ja": null
+      "meaning_ja": "価値の下落；減価償却",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 963,
       "word": "antithesis",
-      "meaning_ja": null
+      "meaning_ja": "正反対",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 964,
       "word": "analogous",
-      "meaning_ja": null
+      "meaning_ja": "類似した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 965,
       "word": "ruthless",
-      "meaning_ja": null
+      "meaning_ja": "冷酷な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 966,
       "word": "eerie",
-      "meaning_ja": null
+      "meaning_ja": "不気味な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 967,
       "word": "liable",
-      "meaning_ja": null
+      "meaning_ja": "責任を負う；しがちな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 968,
       "word": "arduous",
-      "meaning_ja": null
+      "meaning_ja": "骨の折れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 969,
       "word": "affable",
-      "meaning_ja": null
+      "meaning_ja": "親しみやすい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 970,
       "word": "stark",
-      "meaning_ja": null
+      "meaning_ja": "厳しい；むき出しの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 971,
       "word": "slack",
-      "meaning_ja": null
+      "meaning_ja": "緩んだ；不活発な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 972,
       "word": "pivotal",
-      "meaning_ja": null
+      "meaning_ja": "極めて重要な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 973,
       "word": "ablaze",
-      "meaning_ja": null
+      "meaning_ja": "燃え立って",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 974,
       "word": "sumptuous",
-      "meaning_ja": null
+      "meaning_ja": "豪華な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 975,
       "word": "entrenched",
-      "meaning_ja": null
+      "meaning_ja": "根強い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 976,
       "word": "recurrent",
-      "meaning_ja": null
+      "meaning_ja": "繰り返し起こる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 977,
       "word": "distraught",
-      "meaning_ja": null
+      "meaning_ja": "取り乱した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 978,
       "word": "thrifty",
-      "meaning_ja": null
+      "meaning_ja": "倹約的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 979,
       "word": "rowdy",
-      "meaning_ja": null
+      "meaning_ja": "騒々しい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 980,
       "word": "insatiable",
-      "meaning_ja": null
+      "meaning_ja": "飽くことのない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 981,
       "word": "commensurate",
-      "meaning_ja": null
+      "meaning_ja": "釣り合った",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 982,
       "word": "rife",
-      "meaning_ja": null
+      "meaning_ja": "蔓延した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 983,
       "word": "secluded",
-      "meaning_ja": null
+      "meaning_ja": "人里離れた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 984,
       "word": "extenuating",
-      "meaning_ja": null
+      "meaning_ja": "罪を軽くする；酌量すべき",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 985,
       "word": "amiable",
-      "meaning_ja": null
+      "meaning_ja": "愛想のよい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 986,
       "word": "dire",
-      "meaning_ja": null
+      "meaning_ja": "悲惨な；切迫した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 987,
       "word": "congenial",
-      "meaning_ja": null
+      "meaning_ja": "気性の合う；快適な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 988,
       "word": "frazzled",
-      "meaning_ja": null
+      "meaning_ja": "疲れ果てた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 989,
       "word": "squalid",
-      "meaning_ja": null
+      "meaning_ja": "不潔でみすぼらしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 990,
       "word": "impassive",
-      "meaning_ja": null
+      "meaning_ja": "無表情な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 991,
       "word": "clichéd",
-      "meaning_ja": null
+      "meaning_ja": "陳腐な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 992,
       "word": "infallible",
-      "meaning_ja": null
+      "meaning_ja": "絶対に間違わない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 993,
       "word": "contingent",
-      "meaning_ja": null
+      "meaning_ja": "条件次第の；派遣団",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 994,
       "word": "unanimously",
-      "meaning_ja": null
+      "meaning_ja": "満場一致で",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 995,
       "word": "intermittently",
-      "meaning_ja": null
+      "meaning_ja": "断続的に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 996,
       "word": "surreptitiously",
-      "meaning_ja": null
+      "meaning_ja": "こっそりと",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 997,
       "word": "meekly",
-      "meaning_ja": null
+      "meaning_ja": "おとなしく；従順に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 998,
       "word": "retroactively",
-      "meaning_ja": null
+      "meaning_ja": "さかのぼって",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 999,
       "word": "autonomously",
-      "meaning_ja": null
+      "meaning_ja": "自律的に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1000,
       "word": "degenerate",
-      "meaning_ja": null
+      "meaning_ja": "退化する；堕落した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1001,
       "word": "allot",
-      "meaning_ja": null
+      "meaning_ja": "割り当てる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1002,
       "word": "blare",
-      "meaning_ja": null
+      "meaning_ja": "鳴り響く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1003,
       "word": "flex",
-      "meaning_ja": null
+      "meaning_ja": "筋肉を曲げる；力を誇示する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1004,
       "word": "avenge",
-      "meaning_ja": null
+      "meaning_ja": "復讐する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1005,
       "word": "convene",
-      "meaning_ja": null
+      "meaning_ja": "招集する；集まる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1006,
       "word": "catapult",
-      "meaning_ja": null
+      "meaning_ja": "勢いよく飛ばす；投石器",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1007,
       "word": "proscribe",
-      "meaning_ja": null
+      "meaning_ja": "禁止する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1008,
       "word": "align",
-      "meaning_ja": null
+      "meaning_ja": "並べる；足並みをそろえる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1009,
       "word": "clinch",
-      "meaning_ja": null
+      "meaning_ja": "確定する；決着をつける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1010,
       "word": "pry",
-      "meaning_ja": null
+      "meaning_ja": "詮索する；こじ開ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1011,
       "word": "relent",
-      "meaning_ja": null
+      "meaning_ja": "態度を和らげる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1012,
       "word": "infuse",
-      "meaning_ja": null
+      "meaning_ja": "注ぎ込む；吹き込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1013,
       "word": "secrete",
-      "meaning_ja": null
+      "meaning_ja": "分泌する；隠す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1014,
       "word": "debrief",
-      "meaning_ja": null
+      "meaning_ja": "任務後に報告を聞く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1015,
       "word": "perplex",
-      "meaning_ja": null
+      "meaning_ja": "当惑させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1016,
       "word": "inhale",
-      "meaning_ja": null
+      "meaning_ja": "吸い込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1017,
       "word": "ratify",
-      "meaning_ja": null
+      "meaning_ja": "批准する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1018,
       "word": "converge",
-      "meaning_ja": null
+      "meaning_ja": "一点に集まる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1019,
       "word": "rant",
-      "meaning_ja": null
+      "meaning_ja": "わめき立てる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1020,
       "word": "intercede",
-      "meaning_ja": null
+      "meaning_ja": "仲裁する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1021,
       "word": "varnish",
-      "meaning_ja": null
+      "meaning_ja": "ニスを塗る；うわべを飾る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1022,
       "word": "wrest",
-      "meaning_ja": null
+      "meaning_ja": "もぎ取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1023,
       "word": "woo",
-      "meaning_ja": null
+      "meaning_ja": "求愛する；支持を取り付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1024,
       "word": "typify",
-      "meaning_ja": null
+      "meaning_ja": "典型となる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1025,
       "word": "brew",
-      "meaning_ja": null
+      "meaning_ja": "醸造する；起こりかける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1026,
       "word": "instigate",
-      "meaning_ja": null
+      "meaning_ja": "扇動する；引き起こす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1027,
       "word": "rectify",
-      "meaning_ja": null
+      "meaning_ja": "是正する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1028,
       "word": "resuscitate",
-      "meaning_ja": null
+      "meaning_ja": "蘇生させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1029,
       "word": "lament",
-      "meaning_ja": null
+      "meaning_ja": "嘆く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1030,
       "word": "appease",
-      "meaning_ja": null
+      "meaning_ja": "なだめる；譲歩して鎮める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1031,
       "word": "disparage",
-      "meaning_ja": null
+      "meaning_ja": "けなす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1032,
       "word": "brandish",
-      "meaning_ja": null
+      "meaning_ja": "振りかざす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1033,
       "word": "obliterate",
-      "meaning_ja": null
+      "meaning_ja": "完全に消す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1034,
       "word": "oust",
-      "meaning_ja": null
+      "meaning_ja": "追放する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1035,
       "word": "reverberate",
-      "meaning_ja": null
+      "meaning_ja": "反響する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1036,
       "word": "excavate",
-      "meaning_ja": null
+      "meaning_ja": "発掘する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1037,
       "word": "resonate",
-      "meaning_ja": null
+      "meaning_ja": "共鳴する；心に響く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1038,
       "word": "sojourn",
-      "meaning_ja": null
+      "meaning_ja": "一時滞在；一時滞在する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1039,
       "word": "jostle",
-      "meaning_ja": null
+      "meaning_ja": "押しのける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1040,
       "word": "enumerate",
-      "meaning_ja": null
+      "meaning_ja": "列挙する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1041,
       "word": "pulverize",
-      "meaning_ja": null
+      "meaning_ja": "粉砕する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1042,
       "word": "parry",
-      "meaning_ja": null
+      "meaning_ja": "受け流す；かわす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1043,
       "word": "incense",
-      "meaning_ja": null
+      "meaning_ja": "激怒させる；香",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1044,
       "word": "gust",
-      "meaning_ja": null
+      "meaning_ja": "突風",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1045,
       "word": "skirmish",
-      "meaning_ja": null
+      "meaning_ja": "小競り合い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1046,
       "word": "arson",
-      "meaning_ja": null
+      "meaning_ja": "放火",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1047,
       "word": "expletive",
-      "meaning_ja": null
+      "meaning_ja": "ののしり言葉",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1048,
       "word": "cordon",
-      "meaning_ja": null
+      "meaning_ja": "非常線",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1049,
       "word": "austerity",
-      "meaning_ja": null
+      "meaning_ja": "緊縮財政；質素",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1050,
       "word": "confederation",
-      "meaning_ja": null
+      "meaning_ja": "連合",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1051,
       "word": "terrain",
-      "meaning_ja": null
+      "meaning_ja": "地形",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1052,
       "word": "query",
-      "meaning_ja": null
+      "meaning_ja": "質問",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1053,
       "word": "moratorium",
-      "meaning_ja": null
+      "meaning_ja": "一時停止；支払猶予",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1054,
       "word": "retrospect",
-      "meaning_ja": null
+      "meaning_ja": "回顧",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1055,
       "word": "malaise",
-      "meaning_ja": null
+      "meaning_ja": "不調；倦怠感",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1056,
       "word": "pseudonym",
-      "meaning_ja": null
+      "meaning_ja": "筆名；偽名",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1057,
       "word": "scam",
-      "meaning_ja": null
+      "meaning_ja": "詐欺",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1058,
       "word": "contrition",
-      "meaning_ja": null
+      "meaning_ja": "深い悔恨",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1059,
       "word": "stipulation",
-      "meaning_ja": null
+      "meaning_ja": "条件；取り決め",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1060,
       "word": "tatter",
-      "meaning_ja": null
+      "meaning_ja": "ぼろ切れ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1061,
       "word": "quarantine",
-      "meaning_ja": null
+      "meaning_ja": "検疫；隔離する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1062,
       "word": "infirmary",
-      "meaning_ja": null
+      "meaning_ja": "医務室；診療所",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1063,
       "word": "zest",
-      "meaning_ja": null
+      "meaning_ja": "熱意；風味",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1064,
       "word": "pageant",
-      "meaning_ja": null
+      "meaning_ja": "華やかな催し；美人コンテスト",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1065,
       "word": "morsel",
-      "meaning_ja": null
+      "meaning_ja": "一口分；少量",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1066,
       "word": "relapse",
-      "meaning_ja": null
+      "meaning_ja": "再発；再び悪化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1067,
       "word": "transgression",
-      "meaning_ja": null
+      "meaning_ja": "違反；罪",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1068,
       "word": "tenet",
-      "meaning_ja": null
+      "meaning_ja": "信条",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1069,
       "word": "mirage",
-      "meaning_ja": null
+      "meaning_ja": "蜃気楼；幻想",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1070,
       "word": "painstaking",
-      "meaning_ja": null
+      "meaning_ja": "入念な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1071,
       "word": "atrocious",
-      "meaning_ja": null
+      "meaning_ja": "残虐な；ひどい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1072,
       "word": "curt",
-      "meaning_ja": null
+      "meaning_ja": "そっけない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1073,
       "word": "nocturnal",
-      "meaning_ja": null
+      "meaning_ja": "夜行性の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1074,
       "word": "arable",
-      "meaning_ja": null
+      "meaning_ja": "耕作可能な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1075,
       "word": "daunting",
-      "meaning_ja": null
+      "meaning_ja": "気後れさせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1076,
       "word": "intravenous",
-      "meaning_ja": null
+      "meaning_ja": "静脈内の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1077,
       "word": "acrimonious",
-      "meaning_ja": null
+      "meaning_ja": "辛辣な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1078,
       "word": "illegible",
-      "meaning_ja": null
+      "meaning_ja": "判読できない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1079,
       "word": "bogus",
-      "meaning_ja": null
+      "meaning_ja": "偽の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1080,
       "word": "fishy",
-      "meaning_ja": null
+      "meaning_ja": "怪しい；魚臭い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1081,
       "word": "humdrum",
-      "meaning_ja": null
+      "meaning_ja": "単調な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1082,
       "word": "conversant",
-      "meaning_ja": null
+      "meaning_ja": "精通した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1083,
       "word": "tart",
-      "meaning_ja": null
+      "meaning_ja": "酸っぱい；辛辣な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1084,
       "word": "premeditated",
-      "meaning_ja": null
+      "meaning_ja": "計画的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1085,
       "word": "spurious",
-      "meaning_ja": null
+      "meaning_ja": "偽の；根拠のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1086,
       "word": "intrinsic",
-      "meaning_ja": null
+      "meaning_ja": "本質的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1087,
       "word": "innocuous",
-      "meaning_ja": null
+      "meaning_ja": "無害な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1088,
       "word": "sluggish",
-      "meaning_ja": null
+      "meaning_ja": "鈍い；停滞した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1089,
       "word": "insipid",
-      "meaning_ja": null
+      "meaning_ja": "味気ない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1090,
       "word": "ecstatic",
-      "meaning_ja": null
+      "meaning_ja": "有頂天の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1091,
       "word": "superfluous",
-      "meaning_ja": null
+      "meaning_ja": "余分な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1092,
       "word": "propitious",
-      "meaning_ja": null
+      "meaning_ja": "好都合な；幸先のよい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1093,
       "word": "devious",
-      "meaning_ja": null
+      "meaning_ja": "ずるい；遠回りの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1094,
       "word": "omniscient",
-      "meaning_ja": null
+      "meaning_ja": "全知の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1095,
       "word": "petulant",
-      "meaning_ja": null
+      "meaning_ja": "不機嫌な；すねた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1096,
       "word": "idly",
-      "meaning_ja": null
+      "meaning_ja": "何もせずに；ぼんやりと",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1097,
       "word": "innately",
-      "meaning_ja": null
+      "meaning_ja": "生まれつき",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1098,
       "word": "aesthetically",
-      "meaning_ja": null
+      "meaning_ja": "美的に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1099,
       "word": "arguably",
-      "meaning_ja": null
+      "meaning_ja": "おそらく；議論の余地はあるが",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1100,
       "word": "fumble",
-      "meaning_ja": null
+      "meaning_ja": "手探りする；不器用に扱う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1101,
       "word": "pester",
-      "meaning_ja": null
+      "meaning_ja": "しつこく悩ませる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1102,
       "word": "taunt",
-      "meaning_ja": null
+      "meaning_ja": "あざける；挑発する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1103,
       "word": "fortify",
-      "meaning_ja": null
+      "meaning_ja": "強化する；要塞化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1104,
       "word": "venerate",
-      "meaning_ja": null
+      "meaning_ja": "崇敬する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1105,
       "word": "preside",
-      "meaning_ja": null
+      "meaning_ja": "議長を務める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1106,
       "word": "regale",
-      "meaning_ja": null
+      "meaning_ja": "話や食事で楽しませる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1107,
       "word": "squabble",
-      "meaning_ja": null
+      "meaning_ja": "口げんかする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1108,
       "word": "vanquish",
-      "meaning_ja": null
+      "meaning_ja": "打ち負かす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1109,
       "word": "trample",
-      "meaning_ja": null
+      "meaning_ja": "踏みつける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1110,
       "word": "denounce",
-      "meaning_ja": null
+      "meaning_ja": "公然と非難する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1111,
       "word": "scour",
-      "meaning_ja": null
+      "meaning_ja": "くまなく探す；磨く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1112,
       "word": "surmise",
-      "meaning_ja": null
+      "meaning_ja": "推測する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1113,
       "word": "improvise",
-      "meaning_ja": null
+      "meaning_ja": "即興で行う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1114,
       "word": "suffocate",
-      "meaning_ja": null
+      "meaning_ja": "窒息させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1115,
       "word": "smear",
-      "meaning_ja": null
+      "meaning_ja": "塗りつける；中傷する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1116,
       "word": "concoct",
-      "meaning_ja": null
+      "meaning_ja": "調合する；でっち上げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1117,
       "word": "rescind",
-      "meaning_ja": null
+      "meaning_ja": "撤回する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1118,
       "word": "relinquish",
-      "meaning_ja": null
+      "meaning_ja": "手放す；放棄する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1119,
       "word": "revoke",
-      "meaning_ja": null
+      "meaning_ja": "取り消す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1120,
       "word": "inaugurate",
-      "meaning_ja": null
+      "meaning_ja": "就任させる；開始する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1121,
       "word": "foment",
-      "meaning_ja": null
+      "meaning_ja": "騒乱などを煽る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1122,
       "word": "dismantle",
-      "meaning_ja": null
+      "meaning_ja": "解体する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1123,
       "word": "rejuvenate",
-      "meaning_ja": null
+      "meaning_ja": "若返らせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1124,
       "word": "saturate",
-      "meaning_ja": null
+      "meaning_ja": "浸す；飽和させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1125,
       "word": "subjugate",
-      "meaning_ja": null
+      "meaning_ja": "征服する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1126,
       "word": "debase",
-      "meaning_ja": null
+      "meaning_ja": "価値を下げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1127,
       "word": "postulate",
-      "meaning_ja": null
+      "meaning_ja": "仮定する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1128,
       "word": "transcend",
-      "meaning_ja": null
+      "meaning_ja": "超越する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1129,
       "word": "ascribe",
-      "meaning_ja": null
+      "meaning_ja": "原因を帰する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1130,
       "word": "chuckle",
-      "meaning_ja": null
+      "meaning_ja": "くすくす笑う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1131,
       "word": "nibble",
-      "meaning_ja": null
+      "meaning_ja": "少しずつかじる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1132,
       "word": "veto",
-      "meaning_ja": null
+      "meaning_ja": "拒否権；拒否する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1133,
       "word": "infiltrate",
-      "meaning_ja": null
+      "meaning_ja": "潜入する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1134,
       "word": "perturb",
-      "meaning_ja": null
+      "meaning_ja": "動揺させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1135,
       "word": "prevaricate",
-      "meaning_ja": null
+      "meaning_ja": "言い逃れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1136,
       "word": "ingratiate",
-      "meaning_ja": null
+      "meaning_ja": "取り入る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1137,
       "word": "glean",
-      "meaning_ja": null
+      "meaning_ja": "情報などを少しずつ集める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1138,
       "word": "coalesce",
-      "meaning_ja": null
+      "meaning_ja": "合体する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1139,
       "word": "mangle",
-      "meaning_ja": null
+      "meaning_ja": "ひどく損傷させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1140,
       "word": "sequester",
-      "meaning_ja": null
+      "meaning_ja": "隔離する；差し押さえる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1141,
       "word": "segregate",
-      "meaning_ja": null
+      "meaning_ja": "分離する；隔離する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1142,
       "word": "snub",
-      "meaning_ja": null
+      "meaning_ja": "冷たくあしらう",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1143,
       "word": "garnish",
-      "meaning_ja": null
+      "meaning_ja": "料理に付け合わせを添える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1144,
       "word": "hedge",
-      "meaning_ja": null
+      "meaning_ja": "垣根；損失に備える；明言を避ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1145,
       "word": "wrench",
-      "meaning_ja": null
+      "meaning_ja": "ねじる；もぎ取る；レンチ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1146,
       "word": "transpose",
-      "meaning_ja": null
+      "meaning_ja": "位置を入れ替える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1147,
       "word": "invert",
-      "meaning_ja": null
+      "meaning_ja": "逆にする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1148,
       "word": "hunch",
-      "meaning_ja": null
+      "meaning_ja": "予感；背を丸める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1149,
       "word": "felony",
-      "meaning_ja": null
+      "meaning_ja": "重罪",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1150,
       "word": "cramp",
-      "meaning_ja": null
+      "meaning_ja": "けいれん；束縛する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1151,
       "word": "calamity",
-      "meaning_ja": null
+      "meaning_ja": "大災害",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1152,
       "word": "pundit",
-      "meaning_ja": null
+      "meaning_ja": "専門家；評論家",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1153,
       "word": "decoy",
-      "meaning_ja": null
+      "meaning_ja": "おとり",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1154,
       "word": "travesty",
-      "meaning_ja": null
+      "meaning_ja": "茶番；歪曲した模倣",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1155,
       "word": "rendition",
-      "meaning_ja": null
+      "meaning_ja": "演奏；表現；引き渡し",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1156,
       "word": "combustion",
-      "meaning_ja": null
+      "meaning_ja": "燃焼",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1157,
       "word": "shackle",
-      "meaning_ja": null
+      "meaning_ja": "足かせ；束縛する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1158,
       "word": "decorum",
-      "meaning_ja": null
+      "meaning_ja": "礼儀作法",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1159,
       "word": "matrimony",
-      "meaning_ja": null
+      "meaning_ja": "結婚",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1160,
       "word": "quirk",
-      "meaning_ja": null
+      "meaning_ja": "奇癖",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1161,
       "word": "premonition",
-      "meaning_ja": null
+      "meaning_ja": "予感；虫の知らせ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1162,
       "word": "allure",
-      "meaning_ja": null
+      "meaning_ja": "魅力；魅惑する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1163,
       "word": "stigma",
-      "meaning_ja": null
+      "meaning_ja": "不名誉の烙印",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1164,
       "word": "charade",
-      "meaning_ja": null
+      "meaning_ja": "見せかけ；茶番",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1165,
       "word": "foray",
-      "meaning_ja": null
+      "meaning_ja": "新分野への進出；急襲",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1166,
       "word": "delusion",
-      "meaning_ja": null
+      "meaning_ja": "妄想；思い違い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1167,
       "word": "restitution",
-      "meaning_ja": null
+      "meaning_ja": "返還；賠償",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1168,
       "word": "trajectory",
-      "meaning_ja": null
+      "meaning_ja": "軌道",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1169,
       "word": "precinct",
-      "meaning_ja": null
+      "meaning_ja": "管区；地区",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1170,
       "word": "dexterity",
-      "meaning_ja": null
+      "meaning_ja": "器用さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1171,
       "word": "interlude",
-      "meaning_ja": null
+      "meaning_ja": "幕間；合間",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1172,
       "word": "vestige",
-      "meaning_ja": null
+      "meaning_ja": "痕跡",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1173,
       "word": "blight",
-      "meaning_ja": null
+      "meaning_ja": "荒廃させるもの；枯らす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1174,
       "word": "savvy",
-      "meaning_ja": null
+      "meaning_ja": "実用的な知識；事情に通じた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1175,
       "word": "inveterate",
-      "meaning_ja": null
+      "meaning_ja": "根深い；常習的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1176,
       "word": "illustrious",
-      "meaning_ja": null
+      "meaning_ja": "著名な；輝かしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1177,
       "word": "gallant",
-      "meaning_ja": null
+      "meaning_ja": "勇敢な；女性に礼儀正しい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1178,
       "word": "volatile",
-      "meaning_ja": null
+      "meaning_ja": "変わりやすい；揮発性の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1179,
       "word": "forlorn",
-      "meaning_ja": null
+      "meaning_ja": "孤独で悲しい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1180,
       "word": "reticent",
-      "meaning_ja": null
+      "meaning_ja": "寡黙な；控えめな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1181,
       "word": "inept",
-      "meaning_ja": null
+      "meaning_ja": "不器用な；無能な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1182,
       "word": "insular",
-      "meaning_ja": null
+      "meaning_ja": "島の；閉鎖的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1183,
       "word": "scrupulous",
-      "meaning_ja": null
+      "meaning_ja": "良心的な；細心の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1184,
       "word": "cerebral",
-      "meaning_ja": null
+      "meaning_ja": "大脳の；知的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1185,
       "word": "indignant",
-      "meaning_ja": null
+      "meaning_ja": "憤慨した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1186,
       "word": "decrepit",
-      "meaning_ja": null
+      "meaning_ja": "老朽化した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1187,
       "word": "dreary",
-      "meaning_ja": null
+      "meaning_ja": "陰鬱な；退屈な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1188,
       "word": "furtive",
-      "meaning_ja": null
+      "meaning_ja": "こそこそした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1189,
       "word": "illicit",
-      "meaning_ja": null
+      "meaning_ja": "違法な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1190,
       "word": "obstinate",
-      "meaning_ja": null
+      "meaning_ja": "頑固な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1191,
       "word": "morose",
-      "meaning_ja": null
+      "meaning_ja": "不機嫌で無口な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1192,
       "word": "intrepid",
-      "meaning_ja": null
+      "meaning_ja": "勇敢な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1193,
       "word": "palpable",
-      "meaning_ja": null
+      "meaning_ja": "明白な；触知できる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1194,
       "word": "abominable",
-      "meaning_ja": null
+      "meaning_ja": "忌まわしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1195,
       "word": "nebulous",
-      "meaning_ja": null
+      "meaning_ja": "漠然とした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1196,
       "word": "void",
-      "meaning_ja": null
+      "meaning_ja": "無効の；空白",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1197,
       "word": "soggy",
-      "meaning_ja": null
+      "meaning_ja": "水浸しの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1198,
       "word": "subservient",
-      "meaning_ja": null
+      "meaning_ja": "従属的な；卑屈な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1199,
       "word": "residual",
-      "meaning_ja": null
+      "meaning_ja": "残りの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1200,
       "word": "inject",
-      "meaning_ja": null
+      "meaning_ja": "注射する；注入する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1201,
       "word": "flourish",
-      "meaning_ja": null
+      "meaning_ja": "繁栄する；盛んになる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1202,
       "word": "parallel",
-      "meaning_ja": null
+      "meaning_ja": "並行する；類似した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1203,
       "word": "conquer",
-      "meaning_ja": null
+      "meaning_ja": "征服する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1204,
       "word": "dictate",
-      "meaning_ja": null
+      "meaning_ja": "命令する；書き取らせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1205,
       "word": "expel",
-      "meaning_ja": null
+      "meaning_ja": "追放する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1206,
       "word": "stabilize",
-      "meaning_ja": null
+      "meaning_ja": "安定させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1207,
       "word": "circulate",
-      "meaning_ja": null
+      "meaning_ja": "循環する；流布する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1208,
       "word": "signify",
-      "meaning_ja": null
+      "meaning_ja": "意味する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1209,
       "word": "hinder",
-      "meaning_ja": null
+      "meaning_ja": "妨げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1210,
       "word": "merge",
-      "meaning_ja": null
+      "meaning_ja": "合併する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1211,
       "word": "oppress",
-      "meaning_ja": null
+      "meaning_ja": "抑圧する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1212,
       "word": "revive",
-      "meaning_ja": null
+      "meaning_ja": "復活させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1213,
       "word": "excel",
-      "meaning_ja": null
+      "meaning_ja": "秀でる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1214,
       "word": "contaminate",
-      "meaning_ja": null
+      "meaning_ja": "汚染する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1215,
       "word": "concede",
-      "meaning_ja": null
+      "meaning_ja": "認める；譲歩する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1216,
       "word": "amend",
-      "meaning_ja": null
+      "meaning_ja": "修正する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1217,
       "word": "retrieve",
-      "meaning_ja": null
+      "meaning_ja": "取り戻す；検索する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1218,
       "word": "foresee",
-      "meaning_ja": null
+      "meaning_ja": "予見する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1219,
       "word": "repress",
-      "meaning_ja": null
+      "meaning_ja": "抑圧する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1220,
       "word": "overrun",
-      "meaning_ja": null
+      "meaning_ja": "侵略する；超過する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1221,
       "word": "elaborate",
-      "meaning_ja": null
+      "meaning_ja": "詳しく述べる；精巧な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1222,
       "word": "rally",
-      "meaning_ja": null
+      "meaning_ja": "結集する；回復する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1223,
       "word": "outrage",
-      "meaning_ja": null
+      "meaning_ja": "激怒；憤慨させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1224,
       "word": "deception",
-      "meaning_ja": null
+      "meaning_ja": "欺くこと",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1225,
       "word": "biodiversity",
-      "meaning_ja": null
+      "meaning_ja": "生物多様性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1226,
       "word": "fertilizer",
-      "meaning_ja": null
+      "meaning_ja": "肥料",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1227,
       "word": "sovereignty",
-      "meaning_ja": null
+      "meaning_ja": "主権",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1228,
       "word": "autonomy",
-      "meaning_ja": null
+      "meaning_ja": "自治；自律",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1229,
       "word": "starvation",
-      "meaning_ja": null
+      "meaning_ja": "飢餓",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1230,
       "word": "cortex",
-      "meaning_ja": null
+      "meaning_ja": "皮質",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1231,
       "word": "setback",
-      "meaning_ja": null
+      "meaning_ja": "挫折；後退",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1232,
       "word": "intuition",
-      "meaning_ja": null
+      "meaning_ja": "直感",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1233,
       "word": "expenditure",
-      "meaning_ja": null
+      "meaning_ja": "支出",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1234,
       "word": "domain",
-      "meaning_ja": null
+      "meaning_ja": "領域",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1235,
       "word": "counterpart",
-      "meaning_ja": null
+      "meaning_ja": "対応する人物・物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1236,
       "word": "monopoly",
-      "meaning_ja": null
+      "meaning_ja": "独占",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1237,
       "word": "coverage",
-      "meaning_ja": null
+      "meaning_ja": "報道；補償範囲",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1238,
       "word": "paleontologist",
-      "meaning_ja": null
+      "meaning_ja": "古生物学者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1239,
       "word": "stakeholder",
-      "meaning_ja": null
+      "meaning_ja": "利害関係者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1240,
       "word": "psychiatrist",
-      "meaning_ja": null
+      "meaning_ja": "精神科医",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1241,
       "word": "casualty",
-      "meaning_ja": null
+      "meaning_ja": "死傷者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1242,
       "word": "reign",
-      "meaning_ja": null
+      "meaning_ja": "治世；君臨する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1243,
       "word": "triumph",
-      "meaning_ja": null
+      "meaning_ja": "勝利；勝ち誇る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1244,
       "word": "surplus",
-      "meaning_ja": null
+      "meaning_ja": "余剰",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1245,
       "word": "acquisition",
-      "meaning_ja": null
+      "meaning_ja": "獲得；買収",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1246,
       "word": "photosynthesis",
-      "meaning_ja": null
+      "meaning_ja": "光合成",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1247,
       "word": "resolution",
-      "meaning_ja": null
+      "meaning_ja": "決議；解決；解像度",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1248,
       "word": "basin",
-      "meaning_ja": null
+      "meaning_ja": "盆地；流域；洗面器",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1249,
       "word": "hallmark",
-      "meaning_ja": null
+      "meaning_ja": "特徴；品質保証の刻印",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1250,
       "word": "quota",
-      "meaning_ja": null
+      "meaning_ja": "割当量",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1251,
       "word": "realm",
-      "meaning_ja": null
+      "meaning_ja": "領域；王国",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1252,
       "word": "metaphor",
-      "meaning_ja": null
+      "meaning_ja": "比喩",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1253,
       "word": "advent",
-      "meaning_ja": null
+      "meaning_ja": "出現；到来",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1254,
       "word": "prevalence",
-      "meaning_ja": null
+      "meaning_ja": "普及；有病率",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1255,
       "word": "exploitation",
-      "meaning_ja": null
+      "meaning_ja": "搾取；利用",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1256,
       "word": "oversight",
-      "meaning_ja": null
+      "meaning_ja": "見落とし；監督",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1257,
       "word": "synthesis",
-      "meaning_ja": null
+      "meaning_ja": "統合；合成",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1258,
       "word": "toxin",
-      "meaning_ja": null
+      "meaning_ja": "毒素",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1259,
       "word": "tolerance",
-      "meaning_ja": null
+      "meaning_ja": "寛容；耐性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1260,
       "word": "rein",
-      "meaning_ja": null
+      "meaning_ja": "手綱；抑制する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1261,
       "word": "antibiotic",
-      "meaning_ja": null
+      "meaning_ja": "抗生物質",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1262,
       "word": "covenant",
-      "meaning_ja": null
+      "meaning_ja": "契約；盟約",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1263,
       "word": "populace",
-      "meaning_ja": null
+      "meaning_ja": "一般大衆",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1264,
       "word": "uproar",
-      "meaning_ja": null
+      "meaning_ja": "騒動",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1265,
       "word": "massacre",
-      "meaning_ja": null
+      "meaning_ja": "虐殺",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1266,
       "word": "spectrum",
-      "meaning_ja": null
+      "meaning_ja": "範囲；スペクトル",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1267,
       "word": "justification",
-      "meaning_ja": null
+      "meaning_ja": "正当化；根拠",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1268,
       "word": "stalemate",
-      "meaning_ja": null
+      "meaning_ja": "膠着状態",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1269,
       "word": "schizophrenia",
-      "meaning_ja": null
+      "meaning_ja": "統合失調症",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1270,
       "word": "restoration",
-      "meaning_ja": null
+      "meaning_ja": "復元；復旧",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1271,
       "word": "archive",
-      "meaning_ja": null
+      "meaning_ja": "記録保管所；保存する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1272,
       "word": "niche",
-      "meaning_ja": null
+      "meaning_ja": "適所；市場の隙間",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1273,
       "word": "transaction",
-      "meaning_ja": null
+      "meaning_ja": "取引",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1274,
       "word": "margin",
-      "meaning_ja": null
+      "meaning_ja": "余白；差；利益幅",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1275,
       "word": "legislature",
-      "meaning_ja": null
+      "meaning_ja": "立法府",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1276,
       "word": "pharmaceutical",
-      "meaning_ja": null
+      "meaning_ja": "製薬の；医薬品",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1277,
       "word": "subtle",
-      "meaning_ja": null
+      "meaning_ja": "微妙な；巧妙な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1278,
       "word": "paradoxical",
-      "meaning_ja": null
+      "meaning_ja": "逆説的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1279,
       "word": "communal",
-      "meaning_ja": null
+      "meaning_ja": "共同の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1280,
       "word": "authentic",
-      "meaning_ja": null
+      "meaning_ja": "本物の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1281,
       "word": "instrumental",
-      "meaning_ja": null
+      "meaning_ja": "役立つ；器楽の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1282,
       "word": "humanitarian",
-      "meaning_ja": null
+      "meaning_ja": "人道的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1283,
       "word": "adverse",
-      "meaning_ja": null
+      "meaning_ja": "不利な；有害な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1284,
       "word": "paramount",
-      "meaning_ja": null
+      "meaning_ja": "最重要の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1285,
       "word": "administrative",
-      "meaning_ja": null
+      "meaning_ja": "行政の；管理の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1286,
       "word": "invertebrate",
-      "meaning_ja": null
+      "meaning_ja": "無脊椎動物；無脊椎の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1287,
       "word": "staggering",
-      "meaning_ja": null
+      "meaning_ja": "驚くほどの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1288,
       "word": "integral",
-      "meaning_ja": null
+      "meaning_ja": "不可欠な；一体の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1289,
       "word": "exempt",
-      "meaning_ja": null
+      "meaning_ja": "免除された；免除する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1290,
       "word": "infamous",
-      "meaning_ja": null
+      "meaning_ja": "悪名高い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1291,
       "word": "formidable",
-      "meaning_ja": null
+      "meaning_ja": "手ごわい；恐るべき",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1292,
       "word": "microscopic",
-      "meaning_ja": null
+      "meaning_ja": "顕微鏡でしか見えない；極小の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1293,
       "word": "cynical",
-      "meaning_ja": null
+      "meaning_ja": "冷笑的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1294,
       "word": "potent",
-      "meaning_ja": null
+      "meaning_ja": "強力な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1295,
       "word": "disciplinary",
-      "meaning_ja": null
+      "meaning_ja": "懲戒の；規律上の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1296,
       "word": "invalid",
-      "meaning_ja": null
+      "meaning_ja": "無効な；病人",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1297,
       "word": "commonplace",
-      "meaning_ja": null
+      "meaning_ja": "ありふれた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1298,
       "word": "accountable",
-      "meaning_ja": null
+      "meaning_ja": "責任を負う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1299,
       "word": "vicious",
-      "meaning_ja": null
+      "meaning_ja": "悪意のある；凶暴な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1300,
       "word": "proclaim",
-      "meaning_ja": null
+      "meaning_ja": "宣言する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1301,
       "word": "rehabilitate",
-      "meaning_ja": null
+      "meaning_ja": "社会復帰させる；リハビリを行う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1302,
       "word": "flock",
-      "meaning_ja": null
+      "meaning_ja": "群れ；群がる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1303,
       "word": "precede",
-      "meaning_ja": null
+      "meaning_ja": "先行する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1304,
       "word": "strive",
-      "meaning_ja": null
+      "meaning_ja": "懸命に努力する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1305,
       "word": "curb",
-      "meaning_ja": null
+      "meaning_ja": "抑える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1306,
       "word": "soar",
-      "meaning_ja": null
+      "meaning_ja": "急上昇する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1307,
       "word": "shatter",
-      "meaning_ja": null
+      "meaning_ja": "粉砕する；打ち砕く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1308,
       "word": "commence",
-      "meaning_ja": null
+      "meaning_ja": "開始する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1309,
       "word": "confer",
-      "meaning_ja": null
+      "meaning_ja": "授与する；協議する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1310,
       "word": "validate",
-      "meaning_ja": null
+      "meaning_ja": "有効性を確認する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1311,
       "word": "impede",
-      "meaning_ja": null
+      "meaning_ja": "妨げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1312,
       "word": "penetrate",
-      "meaning_ja": null
+      "meaning_ja": "貫通する；浸透する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1313,
       "word": "stoke",
-      "meaning_ja": null
+      "meaning_ja": "火をたく；煽る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1314,
       "word": "despise",
-      "meaning_ja": null
+      "meaning_ja": "軽蔑する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1315,
       "word": "embark",
-      "meaning_ja": null
+      "meaning_ja": "着手する；乗船する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1316,
       "word": "drain",
-      "meaning_ja": null
+      "meaning_ja": "排水する；消耗させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1317,
       "word": "presume",
-      "meaning_ja": null
+      "meaning_ja": "推定する；あえてする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1318,
       "word": "conserve",
-      "meaning_ja": null
+      "meaning_ja": "保護する；節約する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1319,
       "word": "unfold",
-      "meaning_ja": null
+      "meaning_ja": "展開する；広げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1320,
       "word": "diversify",
-      "meaning_ja": null
+      "meaning_ja": "多様化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1321,
       "word": "resume",
-      "meaning_ja": null
+      "meaning_ja": "再開する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1322,
       "word": "downplay",
-      "meaning_ja": null
+      "meaning_ja": "軽く扱う；過小評価する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1323,
       "word": "probe",
-      "meaning_ja": null
+      "meaning_ja": "調査する；探査機",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1324,
       "word": "simulate",
-      "meaning_ja": null
+      "meaning_ja": "模擬実験する；まねる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1325,
       "word": "prosecute",
-      "meaning_ja": null
+      "meaning_ja": "起訴する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1326,
       "word": "eradicate",
-      "meaning_ja": null
+      "meaning_ja": "根絶する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1327,
       "word": "intrude",
-      "meaning_ja": null
+      "meaning_ja": "侵入する；立ち入る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1328,
       "word": "scatter",
-      "meaning_ja": null
+      "meaning_ja": "散らす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1329,
       "word": "implicate",
-      "meaning_ja": null
+      "meaning_ja": "関与を示す；巻き込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1330,
       "word": "evacuate",
-      "meaning_ja": null
+      "meaning_ja": "避難させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1331,
       "word": "evaporate",
-      "meaning_ja": null
+      "meaning_ja": "蒸発する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1332,
       "word": "evoke",
-      "meaning_ja": null
+      "meaning_ja": "呼び起こす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1333,
       "word": "empower",
-      "meaning_ja": null
+      "meaning_ja": "権限を与える；力を付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1334,
       "word": "mimic",
-      "meaning_ja": null
+      "meaning_ja": "まねる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1335,
       "word": "inscription",
-      "meaning_ja": null
+      "meaning_ja": "碑文；銘",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1336,
       "word": "proposition",
-      "meaning_ja": null
+      "meaning_ja": "提案；命題",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1337,
       "word": "entrepreneur",
-      "meaning_ja": null
+      "meaning_ja": "起業家",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1338,
       "word": "clarity",
-      "meaning_ja": null
+      "meaning_ja": "明瞭さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1339,
       "word": "utility",
-      "meaning_ja": null
+      "meaning_ja": "有用性；公共事業",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1340,
       "word": "sanitation",
-      "meaning_ja": null
+      "meaning_ja": "公衆衛生",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1341,
       "word": "parasite",
-      "meaning_ja": null
+      "meaning_ja": "寄生生物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1342,
       "word": "incidence",
-      "meaning_ja": null
+      "meaning_ja": "発生率",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1343,
       "word": "outcry",
-      "meaning_ja": null
+      "meaning_ja": "激しい抗議",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1344,
       "word": "integrity",
-      "meaning_ja": null
+      "meaning_ja": "誠実さ；完全性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1345,
       "word": "dwelling",
-      "meaning_ja": null
+      "meaning_ja": "住居",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1346,
       "word": "archaeology",
-      "meaning_ja": null
+      "meaning_ja": "考古学",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1347,
       "word": "dynasty",
-      "meaning_ja": null
+      "meaning_ja": "王朝",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1348,
       "word": "retina",
-      "meaning_ja": null
+      "meaning_ja": "網膜",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1349,
       "word": "hygiene",
-      "meaning_ja": null
+      "meaning_ja": "衛生",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1350,
       "word": "pretense",
-      "meaning_ja": null
+      "meaning_ja": "見せかけ；口実",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1351,
       "word": "refuge",
-      "meaning_ja": null
+      "meaning_ja": "避難；避難所",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1352,
       "word": "foe",
-      "meaning_ja": null
+      "meaning_ja": "敵",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1353,
       "word": "obedience",
-      "meaning_ja": null
+      "meaning_ja": "服従",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1354,
       "word": "atheist",
-      "meaning_ja": null
+      "meaning_ja": "無神論者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1355,
       "word": "contempt",
-      "meaning_ja": null
+      "meaning_ja": "軽蔑",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1356,
       "word": "conversion",
-      "meaning_ja": null
+      "meaning_ja": "転換；改宗",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1357,
       "word": "anthropology",
-      "meaning_ja": null
+      "meaning_ja": "人類学",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1358,
       "word": "deficiency",
-      "meaning_ja": null
+      "meaning_ja": "欠乏；欠陥",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1359,
       "word": "liberation",
-      "meaning_ja": null
+      "meaning_ja": "解放",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1360,
       "word": "plunge",
-      "meaning_ja": null
+      "meaning_ja": "突っ込む；急落",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1361,
       "word": "solidarity",
-      "meaning_ja": null
+      "meaning_ja": "連帯",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1362,
       "word": "confrontation",
-      "meaning_ja": null
+      "meaning_ja": "対立",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1363,
       "word": "novelty",
-      "meaning_ja": null
+      "meaning_ja": "新しさ；珍しい物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1364,
       "word": "projection",
-      "meaning_ja": null
+      "meaning_ja": "予測；投影",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1365,
       "word": "layman",
-      "meaning_ja": null
+      "meaning_ja": "素人；一般信徒",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1366,
       "word": "vein",
-      "meaning_ja": null
+      "meaning_ja": "静脈；鉱脈",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1367,
       "word": "cluster",
-      "meaning_ja": null
+      "meaning_ja": "集団；集まる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1368,
       "word": "benchmark",
-      "meaning_ja": null
+      "meaning_ja": "基準；指標",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1369,
       "word": "fatality",
-      "meaning_ja": null
+      "meaning_ja": "死亡者；死亡事故",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1370,
       "word": "wreckage",
-      "meaning_ja": null
+      "meaning_ja": "残骸",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1371,
       "word": "specification",
-      "meaning_ja": null
+      "meaning_ja": "仕様；明細",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1372,
       "word": "parameter",
-      "meaning_ja": null
+      "meaning_ja": "条件；変数",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1373,
       "word": "swarm",
-      "meaning_ja": null
+      "meaning_ja": "群れ；群がる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1374,
       "word": "neurologist",
-      "meaning_ja": null
+      "meaning_ja": "神経科医",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1375,
       "word": "hazard",
-      "meaning_ja": null
+      "meaning_ja": "危険",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1376,
       "word": "upstart",
-      "meaning_ja": null
+      "meaning_ja": "成り上がり者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1377,
       "word": "intact",
-      "meaning_ja": null
+      "meaning_ja": "無傷の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1378,
       "word": "solitary",
-      "meaning_ja": null
+      "meaning_ja": "単独の；孤独な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1379,
       "word": "electoral",
-      "meaning_ja": null
+      "meaning_ja": "選挙の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1380,
       "word": "oriented",
-      "meaning_ja": null
+      "meaning_ja": "特定の方向を向いた；重視する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1381,
       "word": "reliant",
-      "meaning_ja": null
+      "meaning_ja": "頼っている",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1382,
       "word": "mandatory",
-      "meaning_ja": null
+      "meaning_ja": "義務的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1383,
       "word": "seamless",
-      "meaning_ja": null
+      "meaning_ja": "継ぎ目のない；円滑な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1384,
       "word": "chaotic",
-      "meaning_ja": null
+      "meaning_ja": "混沌とした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1385,
       "word": "holistic",
-      "meaning_ja": null
+      "meaning_ja": "全体的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1386,
       "word": "vibrant",
-      "meaning_ja": null
+      "meaning_ja": "活気のある；鮮やかな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1387,
       "word": "obsessive",
-      "meaning_ja": null
+      "meaning_ja": "強迫的な；取りつかれた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1388,
       "word": "alternate",
-      "meaning_ja": null
+      "meaning_ja": "交互の；交代する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1389,
       "word": "spontaneous",
-      "meaning_ja": null
+      "meaning_ja": "自発的な；自然発生の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1390,
       "word": "unilateral",
-      "meaning_ja": null
+      "meaning_ja": "一方的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1391,
       "word": "notorious",
-      "meaning_ja": null
+      "meaning_ja": "悪名高い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1392,
       "word": "finite",
-      "meaning_ja": null
+      "meaning_ja": "有限の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1393,
       "word": "barren",
-      "meaning_ja": null
+      "meaning_ja": "不毛な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1394,
       "word": "tribal",
-      "meaning_ja": null
+      "meaning_ja": "部族の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1395,
       "word": "preferential",
-      "meaning_ja": null
+      "meaning_ja": "優遇する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1396,
       "word": "invariably",
-      "meaning_ja": null
+      "meaning_ja": "常に；例外なく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1397,
       "word": "abruptly",
-      "meaning_ja": null
+      "meaning_ja": "突然に；ぶっきらぼうに",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1398,
       "word": "exclusively",
-      "meaning_ja": null
+      "meaning_ja": "もっぱら；独占的に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1399,
       "word": "allegedly",
-      "meaning_ja": null
+      "meaning_ja": "伝えられるところでは",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1400,
       "word": "taint",
-      "meaning_ja": null
+      "meaning_ja": "汚す；汚点",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1401,
       "word": "shimmer",
-      "meaning_ja": null
+      "meaning_ja": "かすかに揺らめく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1402,
       "word": "forage",
-      "meaning_ja": null
+      "meaning_ja": "食料を探す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1403,
       "word": "entangle",
-      "meaning_ja": null
+      "meaning_ja": "絡ませる；巻き込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1404,
       "word": "ruffle",
-      "meaning_ja": null
+      "meaning_ja": "波立たせる；いら立たせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1405,
       "word": "enthrall",
-      "meaning_ja": null
+      "meaning_ja": "魅了する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1406,
       "word": "undermine",
-      "meaning_ja": null
+      "meaning_ja": "弱体化させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1407,
       "word": "slash",
-      "meaning_ja": null
+      "meaning_ja": "大幅に削減する；切りつける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1408,
       "word": "amplify",
-      "meaning_ja": null
+      "meaning_ja": "増幅する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1409,
       "word": "galvanize",
-      "meaning_ja": null
+      "meaning_ja": "奮い立たせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1410,
       "word": "poach",
-      "meaning_ja": null
+      "meaning_ja": "密猟する；引き抜く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1411,
       "word": "replenish",
-      "meaning_ja": null
+      "meaning_ja": "補充する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1412,
       "word": "depict",
-      "meaning_ja": null
+      "meaning_ja": "描写する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1413,
       "word": "spurn",
-      "meaning_ja": null
+      "meaning_ja": "拒絶する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1414,
       "word": "harness",
-      "meaning_ja": null
+      "meaning_ja": "利用する；馬具",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1415,
       "word": "incriminate",
-      "meaning_ja": null
+      "meaning_ja": "有罪を示す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1416,
       "word": "topple",
-      "meaning_ja": null
+      "meaning_ja": "倒す；転覆する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1417,
       "word": "dispatch",
-      "meaning_ja": null
+      "meaning_ja": "派遣する；発送する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1418,
       "word": "anoint",
-      "meaning_ja": null
+      "meaning_ja": "油を塗って聖別する；後継者に選ぶ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1419,
       "word": "supplant",
-      "meaning_ja": null
+      "meaning_ja": "取って代わる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1420,
       "word": "deface",
-      "meaning_ja": null
+      "meaning_ja": "外観を損なう",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1421,
       "word": "embroil",
-      "meaning_ja": null
+      "meaning_ja": "巻き込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1422,
       "word": "rankle",
-      "meaning_ja": null
+      "meaning_ja": "心にわだかまる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1423,
       "word": "revert",
-      "meaning_ja": null
+      "meaning_ja": "元に戻る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1424,
       "word": "deploy",
-      "meaning_ja": null
+      "meaning_ja": "配備する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1425,
       "word": "deprecate",
-      "meaning_ja": null
+      "meaning_ja": "非難する；好ましくないとする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1426,
       "word": "drench",
-      "meaning_ja": null
+      "meaning_ja": "びしょぬれにする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1427,
       "word": "defame",
-      "meaning_ja": null
+      "meaning_ja": "名誉を傷つける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1428,
       "word": "rupture",
-      "meaning_ja": null
+      "meaning_ja": "破裂；破裂する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1429,
       "word": "tally",
-      "meaning_ja": null
+      "meaning_ja": "集計；一致する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1430,
       "word": "splurge",
-      "meaning_ja": null
+      "meaning_ja": "散財する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1431,
       "word": "jeer",
-      "meaning_ja": null
+      "meaning_ja": "あざける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1432,
       "word": "enchant",
-      "meaning_ja": null
+      "meaning_ja": "魅了する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1433,
       "word": "hibernate",
-      "meaning_ja": null
+      "meaning_ja": "冬眠する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1434,
       "word": "tycoon",
-      "meaning_ja": null
+      "meaning_ja": "大物実業家",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1435,
       "word": "partisan",
-      "meaning_ja": null
+      "meaning_ja": "熱烈な支持者；党派的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1436,
       "word": "ruse",
-      "meaning_ja": null
+      "meaning_ja": "策略",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1437,
       "word": "conglomeratio",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 1438,
       "word": "piety",
-      "meaning_ja": null
+      "meaning_ja": "信心深さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1439,
       "word": "scourge",
-      "meaning_ja": null
+      "meaning_ja": "災厄；苦しめる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1440,
       "word": "sham",
-      "meaning_ja": null
+      "meaning_ja": "偽物；見せかけの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1441,
       "word": "remission",
-      "meaning_ja": null
+      "meaning_ja": "病状の寛解；減免",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1442,
       "word": "perforation",
-      "meaning_ja": null
+      "meaning_ja": "穴；穿孔",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1443,
       "word": "renunciation",
-      "meaning_ja": null
+      "meaning_ja": "放棄；断念",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1444,
       "word": "famine",
-      "meaning_ja": null
+      "meaning_ja": "飢饉",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1445,
       "word": "disposition",
-      "meaning_ja": null
+      "meaning_ja": "気質；配置",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1446,
       "word": "gadget",
-      "meaning_ja": null
+      "meaning_ja": "小型の便利な器具",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1447,
       "word": "threshold",
-      "meaning_ja": null
+      "meaning_ja": "敷居；限界値；始まり",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1448,
       "word": "mortality",
-      "meaning_ja": null
+      "meaning_ja": "死亡率；死すべき運命",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1449,
       "word": "dissertation",
-      "meaning_ja": null
+      "meaning_ja": "学位論文",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1450,
       "word": "expulsion",
-      "meaning_ja": null
+      "meaning_ja": "追放",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1451,
       "word": "impulse",
-      "meaning_ja": null
+      "meaning_ja": "衝動",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1452,
       "word": "remittance",
-      "meaning_ja": null
+      "meaning_ja": "送金",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1453,
       "word": "remuneration",
-      "meaning_ja": null
+      "meaning_ja": "報酬",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1454,
       "word": "allegory",
-      "meaning_ja": null
+      "meaning_ja": "寓話；寓意",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1455,
       "word": "connotation",
-      "meaning_ja": null
+      "meaning_ja": "含意；言外の意味",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1456,
       "word": "aspiration",
-      "meaning_ja": null
+      "meaning_ja": "大志；願望",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1457,
       "word": "multitude",
-      "meaning_ja": null
+      "meaning_ja": "多数；群衆",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1458,
       "word": "paucity",
-      "meaning_ja": null
+      "meaning_ja": "不足",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1459,
       "word": "tyranny",
-      "meaning_ja": null
+      "meaning_ja": "圧政",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1460,
       "word": "deity",
-      "meaning_ja": null
+      "meaning_ja": "神；神性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1461,
       "word": "facet",
-      "meaning_ja": null
+      "meaning_ja": "側面",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1462,
       "word": "duplicity",
-      "meaning_ja": null
+      "meaning_ja": "表裏のある言動",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1463,
       "word": "spree",
-      "meaning_ja": null
+      "meaning_ja": "やりたい放題の期間",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1464,
       "word": "alacrity",
-      "meaning_ja": null
+      "meaning_ja": "敏速さ；快活な意欲",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1465,
       "word": "clemency",
-      "meaning_ja": null
+      "meaning_ja": "寛大な処置",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1466,
       "word": "inclination",
-      "meaning_ja": null
+      "meaning_ja": "傾向；傾斜",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1467,
       "word": "periphery",
-      "meaning_ja": null
+      "meaning_ja": "周辺",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1468,
       "word": "absurdity",
-      "meaning_ja": null
+      "meaning_ja": "不合理；ばかげたこと",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1469,
       "word": "insurrection",
-      "meaning_ja": null
+      "meaning_ja": "反乱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1470,
       "word": "platitude",
-      "meaning_ja": null
+      "meaning_ja": "陳腐な決まり文句",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1471,
       "word": "revelation",
-      "meaning_ja": null
+      "meaning_ja": "暴露；啓示",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1472,
       "word": "advocate",
-      "meaning_ja": null
+      "meaning_ja": "支持する；提唱者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1473,
       "word": "sabotage",
-      "meaning_ja": null
+      "meaning_ja": "破壊工作；妨害する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1474,
       "word": "cranky",
-      "meaning_ja": null
+      "meaning_ja": "気難しい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1475,
       "word": "eclectic",
-      "meaning_ja": null
+      "meaning_ja": "折衷的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1476,
       "word": "delirious",
-      "meaning_ja": null
+      "meaning_ja": "意識が混濁した；大喜びの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1477,
       "word": "pensive",
-      "meaning_ja": null
+      "meaning_ja": "物思いに沈んだ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1478,
       "word": "circumspect",
-      "meaning_ja": null
+      "meaning_ja": "慎重な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1479,
       "word": "poised",
-      "meaning_ja": null
+      "meaning_ja": "落ち着いた；準備ができた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1480,
       "word": "irascible",
-      "meaning_ja": null
+      "meaning_ja": "怒りっぽい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1481,
       "word": "implicit",
-      "meaning_ja": null
+      "meaning_ja": "暗黙の；内在する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1482,
       "word": "deceased",
-      "meaning_ja": null
+      "meaning_ja": "亡くなった",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1483,
       "word": "rampant",
-      "meaning_ja": null
+      "meaning_ja": "蔓延する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1484,
       "word": "jubilant",
-      "meaning_ja": null
+      "meaning_ja": "大喜びの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1485,
       "word": "imminent",
-      "meaning_ja": null
+      "meaning_ja": "差し迫った",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1486,
       "word": "rigorous",
-      "meaning_ja": null
+      "meaning_ja": "厳密な；厳しい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1487,
       "word": "inanimate",
-      "meaning_ja": null
+      "meaning_ja": "無生物の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1488,
       "word": "coarse",
-      "meaning_ja": null
+      "meaning_ja": "粗い；下品な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1489,
       "word": "prodigious",
-      "meaning_ja": null
+      "meaning_ja": "驚異的な；莫大な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1490,
       "word": "tangible",
-      "meaning_ja": null
+      "meaning_ja": "具体的な；触れられる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1491,
       "word": "opaque",
-      "meaning_ja": null
+      "meaning_ja": "不透明な；分かりにくい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1492,
       "word": "conscientious",
-      "meaning_ja": null
+      "meaning_ja": "良心的な；念入りな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1493,
       "word": "pernicious",
-      "meaning_ja": null
+      "meaning_ja": "有害な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1494,
       "word": "latent",
-      "meaning_ja": null
+      "meaning_ja": "潜在的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1495,
       "word": "onerous",
-      "meaning_ja": null
+      "meaning_ja": "負担の大きい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1496,
       "word": "reciprocal",
-      "meaning_ja": null
+      "meaning_ja": "相互の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1497,
       "word": "scruffy",
-      "meaning_ja": null
+      "meaning_ja": "みすぼらしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1498,
       "word": "ruefully",
-      "meaning_ja": null
+      "meaning_ja": "後悔して；悲しげに",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1499,
       "word": "nominally",
-      "meaning_ja": null
+      "meaning_ja": "名目上は",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1500,
       "word": "beguile",
-      "meaning_ja": null
+      "meaning_ja": "魅了する；だます",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1501,
       "word": "modulate",
-      "meaning_ja": null
+      "meaning_ja": "調節する；転調する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1502,
       "word": "adjudicate",
-      "meaning_ja": null
+      "meaning_ja": "裁定する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1503,
       "word": "distend",
-      "meaning_ja": null
+      "meaning_ja": "膨張させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1504,
       "word": "acclaim",
-      "meaning_ja": null
+      "meaning_ja": "称賛する；称賛",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1505,
       "word": "abduct",
-      "meaning_ja": null
+      "meaning_ja": "誘拐する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1506,
       "word": "usurp",
-      "meaning_ja": null
+      "meaning_ja": "奪い取る；簒奪する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1507,
       "word": "articulate",
-      "meaning_ja": null
+      "meaning_ja": "明確に表現する；明瞭な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1508,
       "word": "exult",
-      "meaning_ja": null
+      "meaning_ja": "歓喜する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1509,
       "word": "truncate",
-      "meaning_ja": null
+      "meaning_ja": "切り詰める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1510,
       "word": "bombard",
-      "meaning_ja": null
+      "meaning_ja": "砲撃する；質問を浴びせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1511,
       "word": "dissent",
-      "meaning_ja": null
+      "meaning_ja": "異議；異議を唱える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1512,
       "word": "mitigate",
-      "meaning_ja": null
+      "meaning_ja": "軽減する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1513,
       "word": "disavow",
-      "meaning_ja": null
+      "meaning_ja": "否認する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1514,
       "word": "corrode",
-      "meaning_ja": null
+      "meaning_ja": "腐食する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1515,
       "word": "spare",
-      "meaning_ja": null
+      "meaning_ja": "割く；免れさせる；予備の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1516,
       "word": "solicit",
-      "meaning_ja": null
+      "meaning_ja": "懇願する；募る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1517,
       "word": "jiggle",
-      "meaning_ja": null
+      "meaning_ja": "軽く揺する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1518,
       "word": "upend",
-      "meaning_ja": null
+      "meaning_ja": "ひっくり返す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1519,
       "word": "clobber",
-      "meaning_ja": null
+      "meaning_ja": "ひどく殴る；打ち負かす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1520,
       "word": "muddle",
-      "meaning_ja": null
+      "meaning_ja": "混乱させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1521,
       "word": "irk",
-      "meaning_ja": null
+      "meaning_ja": "いら立たせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1522,
       "word": "derive",
-      "meaning_ja": null
+      "meaning_ja": "由来する；引き出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1523,
       "word": "tilt",
-      "meaning_ja": null
+      "meaning_ja": "傾ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1524,
       "word": "flinch",
-      "meaning_ja": null
+      "meaning_ja": "ひるむ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1525,
       "word": "maim",
-      "meaning_ja": null
+      "meaning_ja": "重傷を負わせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1526,
       "word": "trudge",
-      "meaning_ja": null
+      "meaning_ja": "重い足取りで歩く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1527,
       "word": "lubricate",
-      "meaning_ja": null
+      "meaning_ja": "潤滑油を差す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1528,
       "word": "extrapolate",
-      "meaning_ja": null
+      "meaning_ja": "既知の情報から推定する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1529,
       "word": "impeach",
-      "meaning_ja": null
+      "meaning_ja": "弾劾する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1530,
       "word": "obfuscate",
-      "meaning_ja": null
+      "meaning_ja": "わざと分かりにくくする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1531,
       "word": "censure",
-      "meaning_ja": null
+      "meaning_ja": "厳しく非難する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1532,
       "word": "agonize",
-      "meaning_ja": null
+      "meaning_ja": "苦悩する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1533,
       "word": "lull",
-      "meaning_ja": null
+      "meaning_ja": "落ち着かせる；小康状態",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1534,
       "word": "fray",
-      "meaning_ja": null
+      "meaning_ja": "ほつれる；争い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1535,
       "word": "twitch",
-      "meaning_ja": null
+      "meaning_ja": "ぴくっと動く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1536,
       "word": "emancipate",
-      "meaning_ja": null
+      "meaning_ja": "解放する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1537,
       "word": "dividend",
-      "meaning_ja": null
+      "meaning_ja": "配当；利益",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1538,
       "word": "tinge",
-      "meaning_ja": null
+      "meaning_ja": "色合い；わずかな気配",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1539,
       "word": "onslaught",
-      "meaning_ja": null
+      "meaning_ja": "猛攻撃",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1540,
       "word": "creed",
-      "meaning_ja": null
+      "meaning_ja": "信条",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1541,
       "word": "conveyance",
-      "meaning_ja": null
+      "meaning_ja": "運搬；乗り物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1542,
       "word": "felicity",
-      "meaning_ja": null
+      "meaning_ja": "幸福；表現の巧みさ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1543,
       "word": "conjunction",
-      "meaning_ja": null
+      "meaning_ja": "結合；接続詞",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1544,
       "word": "scarcity",
-      "meaning_ja": null
+      "meaning_ja": "不足；希少",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1545,
       "word": "gratuity",
-      "meaning_ja": null
+      "meaning_ja": "心付け；退職手当",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1546,
       "word": "whim",
-      "meaning_ja": null
+      "meaning_ja": "気まぐれ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1547,
       "word": "perjury",
-      "meaning_ja": null
+      "meaning_ja": "偽証",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1548,
       "word": "incarnation",
-      "meaning_ja": null
+      "meaning_ja": "化身",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1549,
       "word": "fortitude",
-      "meaning_ja": null
+      "meaning_ja": "不屈の精神",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1550,
       "word": "truancy",
-      "meaning_ja": null
+      "meaning_ja": "無断欠席",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1551,
       "word": "ledger",
-      "meaning_ja": null
+      "meaning_ja": "帳簿",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1552,
       "word": "equilibrium",
-      "meaning_ja": null
+      "meaning_ja": "均衡",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1553,
       "word": "schism",
-      "meaning_ja": null
+      "meaning_ja": "分裂",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1554,
       "word": "epiphany",
-      "meaning_ja": null
+      "meaning_ja": "突然の悟り",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1555,
       "word": "attrition",
-      "meaning_ja": null
+      "meaning_ja": "消耗；自然減",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1556,
       "word": "cove",
-      "meaning_ja": null
+      "meaning_ja": "入り江",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1557,
       "word": "cavity",
-      "meaning_ja": null
+      "meaning_ja": "空洞；虫歯の穴",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1558,
       "word": "aberration",
-      "meaning_ja": null
+      "meaning_ja": "異常；逸脱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1559,
       "word": "enigma",
-      "meaning_ja": null
+      "meaning_ja": "謎",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1560,
       "word": "euphoria",
-      "meaning_ja": null
+      "meaning_ja": "多幸感",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1561,
       "word": "predilection",
-      "meaning_ja": null
+      "meaning_ja": "好み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1562,
       "word": "affinity",
-      "meaning_ja": null
+      "meaning_ja": "親近感；類似性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1563,
       "word": "remnant",
-      "meaning_ja": null
+      "meaning_ja": "残り",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1564,
       "word": "velocity",
-      "meaning_ja": null
+      "meaning_ja": "速度",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1565,
       "word": "configuration",
-      "meaning_ja": null
+      "meaning_ja": "配置；構成",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1566,
       "word": "progeny",
-      "meaning_ja": null
+      "meaning_ja": "子孫",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1567,
       "word": "rendezvous",
-      "meaning_ja": null
+      "meaning_ja": "待ち合わせ；会合",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1568,
       "word": "satire",
-      "meaning_ja": null
+      "meaning_ja": "風刺",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1569,
       "word": "mandate",
-      "meaning_ja": null
+      "meaning_ja": "命令；権限；委任",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1570,
       "word": "ingenious",
-      "meaning_ja": null
+      "meaning_ja": "独創的な；巧妙な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1571,
       "word": "malevolent",
-      "meaning_ja": null
+      "meaning_ja": "悪意のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1572,
       "word": "bucolic",
-      "meaning_ja": null
+      "meaning_ja": "田園の；牧歌的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1573,
       "word": "exponential",
-      "meaning_ja": null
+      "meaning_ja": "指数関数的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1574,
       "word": "incongruous",
-      "meaning_ja": null
+      "meaning_ja": "不釣り合いな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1575,
       "word": "eloquent",
-      "meaning_ja": null
+      "meaning_ja": "雄弁な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1576,
       "word": "ferocious",
-      "meaning_ja": null
+      "meaning_ja": "凶暴な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1577,
       "word": "profane",
-      "meaning_ja": null
+      "meaning_ja": "不敬な；俗の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1578,
       "word": "incisive",
-      "meaning_ja": null
+      "meaning_ja": "鋭い；的確な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1579,
       "word": "tenuous",
-      "meaning_ja": null
+      "meaning_ja": "薄弱な；かすかな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1580,
       "word": "ambient",
-      "meaning_ja": null
+      "meaning_ja": "周囲の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1581,
       "word": "cursory",
-      "meaning_ja": null
+      "meaning_ja": "ざっとした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1582,
       "word": "terse",
-      "meaning_ja": null
+      "meaning_ja": "簡潔でそっけない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1583,
       "word": "erudite",
-      "meaning_ja": null
+      "meaning_ja": "博識の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1584,
       "word": "odious",
-      "meaning_ja": null
+      "meaning_ja": "忌まわしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1585,
       "word": "pompous",
-      "meaning_ja": null
+      "meaning_ja": "尊大な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1586,
       "word": "truculent",
-      "meaning_ja": null
+      "meaning_ja": "攻撃的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1587,
       "word": "ostensible",
-      "meaning_ja": null
+      "meaning_ja": "表向きの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1588,
       "word": "colloquial",
-      "meaning_ja": null
+      "meaning_ja": "口語の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1589,
       "word": "insolent",
-      "meaning_ja": null
+      "meaning_ja": "横柄な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1590,
       "word": "egregious",
-      "meaning_ja": null
+      "meaning_ja": "甚だしい；言語道断の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1591,
       "word": "luminous",
-      "meaning_ja": null
+      "meaning_ja": "光を放つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1592,
       "word": "amenable",
-      "meaning_ja": null
+      "meaning_ja": "従順な；受け入れる用意がある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1593,
       "word": "elated",
-      "meaning_ja": null
+      "meaning_ja": "大喜びの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1594,
       "word": "ludicrous",
-      "meaning_ja": null
+      "meaning_ja": "ばかげた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1595,
       "word": "suave",
-      "meaning_ja": null
+      "meaning_ja": "物腰の柔らかい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1596,
       "word": "sullen",
-      "meaning_ja": null
+      "meaning_ja": "むっつりした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1597,
       "word": "incumbent",
-      "meaning_ja": null
+      "meaning_ja": "現職の；義務である",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1598,
       "word": "fortuitously",
-      "meaning_ja": null
+      "meaning_ja": "偶然に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1599,
       "word": "cordially",
-      "meaning_ja": null
+      "meaning_ja": "心から；親しみを込めて",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1600,
       "word": "retract",
-      "meaning_ja": null
+      "meaning_ja": "撤回する；引っ込める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1601,
       "word": "extradite",
-      "meaning_ja": null
+      "meaning_ja": "犯罪人を引き渡す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1602,
       "word": "persecute",
-      "meaning_ja": null
+      "meaning_ja": "迫害する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1603,
       "word": "garble",
-      "meaning_ja": null
+      "meaning_ja": "言葉を混乱させて伝える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1604,
       "word": "nurture",
-      "meaning_ja": null
+      "meaning_ja": "育てる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1605,
       "word": "hobble",
-      "meaning_ja": null
+      "meaning_ja": "足を引きずる；妨げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1606,
       "word": "incinerate",
-      "meaning_ja": null
+      "meaning_ja": "焼却する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1607,
       "word": "invigorate",
-      "meaning_ja": null
+      "meaning_ja": "元気付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1608,
       "word": "vilify",
-      "meaning_ja": null
+      "meaning_ja": "中傷する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1609,
       "word": "cogitate",
-      "meaning_ja": null
+      "meaning_ja": "熟考する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1610,
       "word": "edify",
-      "meaning_ja": null
+      "meaning_ja": "教化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1611,
       "word": "percolate",
-      "meaning_ja": null
+      "meaning_ja": "染み通る；徐々に広まる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1612,
       "word": "reel",
-      "meaning_ja": null
+      "meaning_ja": "よろめく；巻き枠",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1613,
       "word": "patronize",
-      "meaning_ja": null
+      "meaning_ja": "ひいきにする；見下した態度を取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1614,
       "word": "stutter",
-      "meaning_ja": null
+      "meaning_ja": "どもる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1615,
       "word": "acquiesce",
-      "meaning_ja": null
+      "meaning_ja": "黙認する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1616,
       "word": "acclimate",
-      "meaning_ja": null
+      "meaning_ja": "順応させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1617,
       "word": "foil",
-      "meaning_ja": null
+      "meaning_ja": "阻止する；金属箔",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1618,
       "word": "debilitate",
-      "meaning_ja": null
+      "meaning_ja": "衰弱させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1619,
       "word": "espouse",
-      "meaning_ja": null
+      "meaning_ja": "主義などを支持する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1620,
       "word": "lampoon",
-      "meaning_ja": null
+      "meaning_ja": "風刺する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1621,
       "word": "chide",
-      "meaning_ja": null
+      "meaning_ja": "叱る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1622,
       "word": "tabulate",
-      "meaning_ja": null
+      "meaning_ja": "表にまとめる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1623,
       "word": "incubate",
-      "meaning_ja": null
+      "meaning_ja": "孵化させる；培養する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1624,
       "word": "preface",
-      "meaning_ja": null
+      "meaning_ja": "序文；前置きする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1625,
       "word": "drool",
-      "meaning_ja": null
+      "meaning_ja": "よだれを垂らす；欲しがる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1626,
       "word": "entwine",
-      "meaning_ja": null
+      "meaning_ja": "絡み合う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1627,
       "word": "scoff",
-      "meaning_ja": null
+      "meaning_ja": "あざ笑う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1628,
       "word": "amass",
-      "meaning_ja": null
+      "meaning_ja": "蓄積する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1629,
       "word": "crumple",
-      "meaning_ja": null
+      "meaning_ja": "しわくちゃにする；崩れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1630,
       "word": "loiter",
-      "meaning_ja": null
+      "meaning_ja": "ぶらぶらする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1631,
       "word": "billow",
-      "meaning_ja": null
+      "meaning_ja": "大きく波打つ；膨らむ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1632,
       "word": "bungle",
-      "meaning_ja": null
+      "meaning_ja": "しくじる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1633,
       "word": "wrangle",
-      "meaning_ja": null
+      "meaning_ja": "言い争う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1634,
       "word": "coddle",
-      "meaning_ja": null
+      "meaning_ja": "甘やかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1635,
       "word": "crucify",
-      "meaning_ja": null
+      "meaning_ja": "十字架にかける；酷評する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1636,
       "word": "devour",
-      "meaning_ja": null
+      "meaning_ja": "むさぼり食う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1637,
       "word": "forestall",
-      "meaning_ja": null
+      "meaning_ja": "先手を打って防ぐ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1638,
       "word": "emanate",
-      "meaning_ja": null
+      "meaning_ja": "発する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1639,
       "word": "parch",
-      "meaning_ja": null
+      "meaning_ja": "干からびさせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1640,
       "word": "tether",
-      "meaning_ja": null
+      "meaning_ja": "つなぎ留める；つなぎ綱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1641,
       "word": "binge",
-      "meaning_ja": null
+      "meaning_ja": "暴飲暴食；度を越して熱中する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1642,
       "word": "siphon",
-      "meaning_ja": null
+      "meaning_ja": "吸い上げる；不正に流用する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1643,
       "word": "proffer",
-      "meaning_ja": null
+      "meaning_ja": "差し出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1644,
       "word": "stampede",
-      "meaning_ja": null
+      "meaning_ja": "群衆が殺到する；暴走",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1645,
       "word": "veracity",
-      "meaning_ja": null
+      "meaning_ja": "真実性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1646,
       "word": "spasm",
-      "meaning_ja": null
+      "meaning_ja": "けいれん",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1647,
       "word": "tremor",
-      "meaning_ja": null
+      "meaning_ja": "震え；微震",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1648,
       "word": "effigy",
-      "meaning_ja": null
+      "meaning_ja": "人形；肖像",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1649,
       "word": "hegemony",
-      "meaning_ja": null
+      "meaning_ja": "覇権",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1650,
       "word": "crevice",
-      "meaning_ja": null
+      "meaning_ja": "割れ目",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1651,
       "word": "quagmire",
-      "meaning_ja": null
+      "meaning_ja": "泥沼；苦境",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1652,
       "word": "lunge",
-      "meaning_ja": null
+      "meaning_ja": "突進する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1653,
       "word": "autocrat",
-      "meaning_ja": null
+      "meaning_ja": "独裁者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1654,
       "word": "blurb",
-      "meaning_ja": null
+      "meaning_ja": "宣伝文句",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1655,
       "word": "disclaimer",
-      "meaning_ja": null
+      "meaning_ja": "免責事項；否認声明",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1656,
       "word": "fringe",
-      "meaning_ja": null
+      "meaning_ja": "周辺；房飾り",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1657,
       "word": "abstinence",
-      "meaning_ja": null
+      "meaning_ja": "禁欲；節制",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1658,
       "word": "trepidation",
-      "meaning_ja": null
+      "meaning_ja": "不安；おののき",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1659,
       "word": "fissure",
-      "meaning_ja": null
+      "meaning_ja": "裂け目",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1660,
       "word": "heist",
-      "meaning_ja": null
+      "meaning_ja": "強盗",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1661,
       "word": "rig",
-      "meaning_ja": null
+      "meaning_ja": "装備する；不正操作する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1662,
       "word": "sreverie",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 1663,
       "word": "bastion",
-      "meaning_ja": null
+      "meaning_ja": "とりで；最後の拠点",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1664,
       "word": "synopsis",
-      "meaning_ja": null
+      "meaning_ja": "概要",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1665,
       "word": "commendation",
-      "meaning_ja": null
+      "meaning_ja": "称賛；表彰",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1666,
       "word": "tirade",
-      "meaning_ja": null
+      "meaning_ja": "長々とした激しい非難",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1667,
       "word": "clatter",
-      "meaning_ja": null
+      "meaning_ja": "がたがたいう音",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1668,
       "word": "abrasive",
-      "meaning_ja": null
+      "meaning_ja": "研磨用の；とげとげしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1669,
       "word": "nimble",
-      "meaning_ja": null
+      "meaning_ja": "敏捷な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1670,
       "word": "penitent",
-      "meaning_ja": null
+      "meaning_ja": "後悔した；悔い改めた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1671,
       "word": "vulgar",
-      "meaning_ja": null
+      "meaning_ja": "下品な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1672,
       "word": "grim",
-      "meaning_ja": null
+      "meaning_ja": "厳しい；陰惨な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1673,
       "word": "indolent",
-      "meaning_ja": null
+      "meaning_ja": "怠惰な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1674,
       "word": "rancid",
-      "meaning_ja": null
+      "meaning_ja": "油脂が腐った",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1675,
       "word": "cogent",
-      "meaning_ja": null
+      "meaning_ja": "説得力のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1676,
       "word": "flippant",
-      "meaning_ja": null
+      "meaning_ja": "軽薄な；不謹慎な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1677,
       "word": "genial",
-      "meaning_ja": null
+      "meaning_ja": "愛想のよい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1678,
       "word": "delectable",
-      "meaning_ja": null
+      "meaning_ja": "非常においしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1679,
       "word": "subliminal",
-      "meaning_ja": null
+      "meaning_ja": "潜在意識に働きかける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1680,
       "word": "jocular",
-      "meaning_ja": null
+      "meaning_ja": "冗談好きの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1681,
       "word": "laborious",
-      "meaning_ja": null
+      "meaning_ja": "骨の折れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1682,
       "word": "sordid",
-      "meaning_ja": null
+      "meaning_ja": "卑劣な；不潔な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1683,
       "word": "jovial",
-      "meaning_ja": null
+      "meaning_ja": "陽気な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1684,
       "word": "auxiliary",
-      "meaning_ja": null
+      "meaning_ja": "補助の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1685,
       "word": "virulent",
-      "meaning_ja": null
+      "meaning_ja": "毒性の強い；悪意の強い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1686,
       "word": "dank",
-      "meaning_ja": null
+      "meaning_ja": "じめじめした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1687,
       "word": "comatose",
-      "meaning_ja": null
+      "meaning_ja": "昏睡状態の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1688,
       "word": "condescending",
-      "meaning_ja": null
+      "meaning_ja": "見下したような",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1689,
       "word": "sedate",
-      "meaning_ja": null
+      "meaning_ja": "落ち着いた；鎮静させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1690,
       "word": "infantile",
-      "meaning_ja": null
+      "meaning_ja": "幼稚な；乳児の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1691,
       "word": "strident",
-      "meaning_ja": null
+      "meaning_ja": "耳障りな；激しい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1692,
       "word": "dispassionate",
-      "meaning_ja": null
+      "meaning_ja": "冷静で公平な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1693,
       "word": "bereaved",
-      "meaning_ja": null
+      "meaning_ja": "近親者を亡くした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1694,
       "word": "scant",
-      "meaning_ja": null
+      "meaning_ja": "わずかな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1695,
       "word": "deranged",
-      "meaning_ja": null
+      "meaning_ja": "精神が錯乱した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1696,
       "word": "ravenous",
-      "meaning_ja": null
+      "meaning_ja": "非常に空腹の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1697,
       "word": "raucous",
-      "meaning_ja": null
+      "meaning_ja": "騒々しい；耳障りな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1698,
       "word": "vexing",
-      "meaning_ja": null
+      "meaning_ja": "いら立たしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1699,
       "word": "wanton",
-      "meaning_ja": null
+      "meaning_ja": "無謀な；理由もなく残酷な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1700,
       "word": "clamp",
-      "meaning_ja": null
+      "meaning_ja": "締め付ける；留め具",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1701,
       "word": "faze",
-      "meaning_ja": null
+      "meaning_ja": "動揺させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1702,
       "word": "entail",
-      "meaning_ja": null
+      "meaning_ja": "必然的に伴う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1703,
       "word": "annihilate",
-      "meaning_ja": null
+      "meaning_ja": "全滅させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1704,
       "word": "snarl",
-      "meaning_ja": null
+      "meaning_ja": "うなる；怒鳴る；もつれ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1705,
       "word": "renounce",
-      "meaning_ja": null
+      "meaning_ja": "放棄する；縁を切る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1706,
       "word": "ameliorate",
-      "meaning_ja": null
+      "meaning_ja": "改善する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1707,
       "word": "subsidize",
-      "meaning_ja": null
+      "meaning_ja": "補助金を与える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1708,
       "word": "wean",
-      "meaning_ja": null
+      "meaning_ja": "離乳させる；徐々にやめさせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1709,
       "word": "embolden",
-      "meaning_ja": null
+      "meaning_ja": "勇気付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1710,
       "word": "ruminate",
-      "meaning_ja": null
+      "meaning_ja": "熟考する；反芻する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1711,
       "word": "fathom",
-      "meaning_ja": null
+      "meaning_ja": "理解する；水深を測る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1712,
       "word": "equivocate",
-      "meaning_ja": null
+      "meaning_ja": "曖昧な言葉でごまかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1713,
       "word": "chaperone",
-      "meaning_ja": null
+      "meaning_ja": "付き添う；付き添い人",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1714,
       "word": "pollinate",
-      "meaning_ja": null
+      "meaning_ja": "受粉させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1715,
       "word": "usher",
-      "meaning_ja": null
+      "meaning_ja": "案内する；案内係",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1716,
       "word": "cripple",
-      "meaning_ja": null
+      "meaning_ja": "機能を損なう",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1717,
       "word": "redeem",
-      "meaning_ja": null
+      "meaning_ja": "償う；引き換える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1718,
       "word": "whine",
-      "meaning_ja": null
+      "meaning_ja": "愚痴を言う；泣き言を言う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1719,
       "word": "mutate",
-      "meaning_ja": null
+      "meaning_ja": "突然変異する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1720,
       "word": "fare",
-      "meaning_ja": null
+      "meaning_ja": "うまくやっていく；運賃",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1721,
       "word": "distort",
-      "meaning_ja": null
+      "meaning_ja": "歪める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1722,
       "word": "pillage",
-      "meaning_ja": null
+      "meaning_ja": "略奪する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1723,
       "word": "slander",
-      "meaning_ja": null
+      "meaning_ja": "口頭で中傷する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1724,
       "word": "pledge",
-      "meaning_ja": null
+      "meaning_ja": "誓約する；誓約",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1725,
       "word": "recant",
-      "meaning_ja": null
+      "meaning_ja": "発言や信仰を撤回する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1726,
       "word": "surmount",
-      "meaning_ja": null
+      "meaning_ja": "克服する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1727,
       "word": "jilt",
-      "meaning_ja": null
+      "meaning_ja": "恋人を振る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1728,
       "word": "prowl",
-      "meaning_ja": null
+      "meaning_ja": "うろつく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1729,
       "word": "chasten",
-      "meaning_ja": null
+      "meaning_ja": "懲らしめる；反省させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1730,
       "word": "pitch",
-      "meaning_ja": null
+      "meaning_ja": "投げる；売り込む；音の高さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1731,
       "word": "clump",
-      "meaning_ja": null
+      "meaning_ja": "塊；群がる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1732,
       "word": "revere",
-      "meaning_ja": null
+      "meaning_ja": "深く敬う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1733,
       "word": "ensue",
-      "meaning_ja": null
+      "meaning_ja": "結果として起こる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1734,
       "word": "intervene",
-      "meaning_ja": null
+      "meaning_ja": "介入する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1735,
       "word": "pulsate",
-      "meaning_ja": null
+      "meaning_ja": "脈打つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1736,
       "word": "finesse",
-      "meaning_ja": null
+      "meaning_ja": "巧妙な手腕",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1737,
       "word": "veneer",
-      "meaning_ja": null
+      "meaning_ja": "化粧板；うわべ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1738,
       "word": "undertone",
-      "meaning_ja": null
+      "meaning_ja": "低い声；含み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1739,
       "word": "dent",
-      "meaning_ja": null
+      "meaning_ja": "へこみ；損なう",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1740,
       "word": "prerogative",
-      "meaning_ja": null
+      "meaning_ja": "特権",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1741,
       "word": "abyss",
-      "meaning_ja": null
+      "meaning_ja": "深淵",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1742,
       "word": "equity",
-      "meaning_ja": null
+      "meaning_ja": "公平；自己資本",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1743,
       "word": "specter",
-      "meaning_ja": null
+      "meaning_ja": "幽霊；不安を与えるもの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1744,
       "word": "posture",
-      "meaning_ja": null
+      "meaning_ja": "姿勢；態度",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1745,
       "word": "indictment",
-      "meaning_ja": null
+      "meaning_ja": "起訴；告発",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1746,
       "word": "paternity",
-      "meaning_ja": null
+      "meaning_ja": "父であること；父性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1747,
       "word": "perseverance",
-      "meaning_ja": null
+      "meaning_ja": "忍耐力",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1748,
       "word": "menace",
-      "meaning_ja": null
+      "meaning_ja": "脅威；脅す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1749,
       "word": "epitaph",
-      "meaning_ja": null
+      "meaning_ja": "墓碑銘",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1750,
       "word": "regimen",
-      "meaning_ja": null
+      "meaning_ja": "健康管理の療法・食事法",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1751,
       "word": "plateau",
-      "meaning_ja": null
+      "meaning_ja": "高原；停滞期",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1752,
       "word": "pigment",
-      "meaning_ja": null
+      "meaning_ja": "顔料；色素",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1753,
       "word": "accreditation",
-      "meaning_ja": null
+      "meaning_ja": "認定",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1754,
       "word": "prophecy",
-      "meaning_ja": null
+      "meaning_ja": "予言",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1755,
       "word": "efficacy",
-      "meaning_ja": null
+      "meaning_ja": "効能",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1756,
       "word": "conspirator",
-      "meaning_ja": null
+      "meaning_ja": "共謀者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1757,
       "word": "convalescence",
-      "meaning_ja": null
+      "meaning_ja": "病後の回復",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1758,
       "word": "leverage",
-      "meaning_ja": null
+      "meaning_ja": "影響力；てこの作用",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1759,
       "word": "treason",
-      "meaning_ja": null
+      "meaning_ja": "反逆罪",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1760,
       "word": "tumult",
-      "meaning_ja": null
+      "meaning_ja": "騒動",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1761,
       "word": "rhetoric",
-      "meaning_ja": null
+      "meaning_ja": "修辞；美辞麗句",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1762,
       "word": "pilgrimage",
-      "meaning_ja": null
+      "meaning_ja": "巡礼",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1763,
       "word": "pedestal",
-      "meaning_ja": null
+      "meaning_ja": "台座",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1764,
       "word": "inflammation",
-      "meaning_ja": null
+      "meaning_ja": "炎症",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1765,
       "word": "cartel",
-      "meaning_ja": null
+      "meaning_ja": "企業間の価格・生産協定",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1766,
       "word": "cohort",
-      "meaning_ja": null
+      "meaning_ja": "集団；同年齢群",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1767,
       "word": "protagonist",
-      "meaning_ja": null
+      "meaning_ja": "主人公；主要人物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1768,
       "word": "speculation",
-      "meaning_ja": null
+      "meaning_ja": "推測；投機",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1769,
       "word": "prot",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 1770,
       "word": "conundrum",
-      "meaning_ja": null
+      "meaning_ja": "難問",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1771,
       "word": "snare",
-      "meaning_ja": null
+      "meaning_ja": "わな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1772,
       "word": "archipelago",
-      "meaning_ja": null
+      "meaning_ja": "群島",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1773,
       "word": "apparition",
-      "meaning_ja": null
+      "meaning_ja": "幽霊；幻影",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1774,
       "word": "pretext",
-      "meaning_ja": null
+      "meaning_ja": "口実",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1775,
       "word": "decree",
-      "meaning_ja": null
+      "meaning_ja": "法令；命じる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1776,
       "word": "myriad",
-      "meaning_ja": null
+      "meaning_ja": "無数の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1777,
       "word": "unwitting",
-      "meaning_ja": null
+      "meaning_ja": "知らずにした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1778,
       "word": "unfounded",
-      "meaning_ja": null
+      "meaning_ja": "根拠のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1779,
       "word": "dubious",
-      "meaning_ja": null
+      "meaning_ja": "疑わしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1780,
       "word": "statutory",
-      "meaning_ja": null
+      "meaning_ja": "法定の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1781,
       "word": "pragmatic",
-      "meaning_ja": null
+      "meaning_ja": "実用的な；現実的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1782,
       "word": "cardinal",
-      "meaning_ja": null
+      "meaning_ja": "基本的な；枢機卿",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1783,
       "word": "philanthropic",
-      "meaning_ja": null
+      "meaning_ja": "慈善の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1784,
       "word": "devout",
-      "meaning_ja": null
+      "meaning_ja": "信心深い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1785,
       "word": "lackluster",
-      "meaning_ja": null
+      "meaning_ja": "精彩を欠いた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1786,
       "word": "trifling",
-      "meaning_ja": null
+      "meaning_ja": "取るに足らない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1787,
       "word": "voracious",
-      "meaning_ja": null
+      "meaning_ja": "貪欲な；大食いの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1788,
       "word": "ephemeral",
-      "meaning_ja": null
+      "meaning_ja": "はかない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1789,
       "word": "strenuous",
-      "meaning_ja": null
+      "meaning_ja": "激しい；多大な努力を要する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1790,
       "word": "vicarious",
-      "meaning_ja": null
+      "meaning_ja": "他人を通じて経験する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1791,
       "word": "sparse",
-      "meaning_ja": null
+      "meaning_ja": "まばらな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1792,
       "word": "callous",
-      "meaning_ja": null
+      "meaning_ja": "冷淡な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1793,
       "word": "vivacious",
-      "meaning_ja": null
+      "meaning_ja": "快活な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1794,
       "word": "impetuous",
-      "meaning_ja": null
+      "meaning_ja": "衝動的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1795,
       "word": "pliable",
-      "meaning_ja": null
+      "meaning_ja": "曲げやすい；柔軟な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1796,
       "word": "nascent",
-      "meaning_ja": null
+      "meaning_ja": "生まれつつある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1797,
       "word": "hilarious",
-      "meaning_ja": null
+      "meaning_ja": "非常におかしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1798,
       "word": "aghast",
-      "meaning_ja": null
+      "meaning_ja": "仰天して",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1799,
       "word": "perpetual",
-      "meaning_ja": null
+      "meaning_ja": "絶え間ない；永久の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1800,
       "word": "prune",
-      "meaning_ja": null
+      "meaning_ja": "剪定する；削減する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1801,
       "word": "slight",
-      "meaning_ja": null
+      "meaning_ja": "わずかな；軽視する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1802,
       "word": "loathe",
-      "meaning_ja": null
+      "meaning_ja": "ひどく嫌う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1803,
       "word": "scrounge",
-      "meaning_ja": null
+      "meaning_ja": "ねだる；探し回って手に入れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1804,
       "word": "bellow",
-      "meaning_ja": null
+      "meaning_ja": "大声で叫ぶ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1805,
       "word": "amputate",
-      "meaning_ja": null
+      "meaning_ja": "手足を切断する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1806,
       "word": "scrutinize",
-      "meaning_ja": null
+      "meaning_ja": "詳しく調べる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1807,
       "word": "incite",
-      "meaning_ja": null
+      "meaning_ja": "扇動する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1808,
       "word": "empathize",
-      "meaning_ja": null
+      "meaning_ja": "共感する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1809,
       "word": "embody",
-      "meaning_ja": null
+      "meaning_ja": "具体化する；体現する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1810,
       "word": "manipulate",
-      "meaning_ja": null
+      "meaning_ja": "巧みに操る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1811,
       "word": "foist",
-      "meaning_ja": null
+      "meaning_ja": "押し付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1812,
       "word": "deteriorate",
-      "meaning_ja": null
+      "meaning_ja": "悪化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1813,
       "word": "arbitrate",
-      "meaning_ja": null
+      "meaning_ja": "仲裁する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1814,
       "word": "erode",
-      "meaning_ja": null
+      "meaning_ja": "侵食する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1815,
       "word": "exterminate",
-      "meaning_ja": null
+      "meaning_ja": "駆除する；絶滅させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1816,
       "word": "cajole",
-      "meaning_ja": null
+      "meaning_ja": "甘言で説得する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1817,
       "word": "bulge",
-      "meaning_ja": null
+      "meaning_ja": "膨らむ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1818,
       "word": "fetter",
-      "meaning_ja": null
+      "meaning_ja": "足かせ；束縛する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1819,
       "word": "engulf",
-      "meaning_ja": null
+      "meaning_ja": "飲み込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1820,
       "word": "integrate",
-      "meaning_ja": null
+      "meaning_ja": "統合する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1821,
       "word": "endow",
-      "meaning_ja": null
+      "meaning_ja": "授ける；寄付する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1822,
       "word": "writhe",
-      "meaning_ja": null
+      "meaning_ja": "身をよじる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1823,
       "word": "belie",
-      "meaning_ja": null
+      "meaning_ja": "誤りを示す；実態を隠す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1824,
       "word": "eavesdrop",
-      "meaning_ja": null
+      "meaning_ja": "盗み聞きする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1825,
       "word": "ignite",
-      "meaning_ja": null
+      "meaning_ja": "点火する；引き起こす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1826,
       "word": "impel",
-      "meaning_ja": null
+      "meaning_ja": "駆り立てる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1827,
       "word": "ferment",
-      "meaning_ja": null
+      "meaning_ja": "発酵する；混乱",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1828,
       "word": "exalt",
-      "meaning_ja": null
+      "meaning_ja": "称揚する；高める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1829,
       "word": "stow",
-      "meaning_ja": null
+      "meaning_ja": "しまい込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1830,
       "word": "abhor",
-      "meaning_ja": null
+      "meaning_ja": "忌み嫌う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1831,
       "word": "wield",
-      "meaning_ja": null
+      "meaning_ja": "権力を行使する；道具を使う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1832,
       "word": "recede",
-      "meaning_ja": null
+      "meaning_ja": "後退する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1833,
       "word": "intrigue",
-      "meaning_ja": null
+      "meaning_ja": "興味をそそる；陰謀",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1834,
       "word": "sneer",
-      "meaning_ja": null
+      "meaning_ja": "冷笑する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1835,
       "word": "caveat",
-      "meaning_ja": null
+      "meaning_ja": "注意事項；但し書き",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1836,
       "word": "outlay",
-      "meaning_ja": null
+      "meaning_ja": "支出",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1837,
       "word": "fertility",
-      "meaning_ja": null
+      "meaning_ja": "繁殖力；肥沃さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1838,
       "word": "serenity",
-      "meaning_ja": null
+      "meaning_ja": "平静",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1839,
       "word": "relic",
-      "meaning_ja": null
+      "meaning_ja": "遺物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1840,
       "word": "scapegoat",
-      "meaning_ja": null
+      "meaning_ja": "スケープゴート；身代わり",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1841,
       "word": "plea",
-      "meaning_ja": null
+      "meaning_ja": "懇願；抗弁",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1842,
       "word": "artillery",
-      "meaning_ja": null
+      "meaning_ja": "大砲；砲兵",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1843,
       "word": "uprising",
-      "meaning_ja": null
+      "meaning_ja": "蜂起",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1844,
       "word": "entity",
-      "meaning_ja": null
+      "meaning_ja": "実体；組織",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1845,
       "word": "guise",
-      "meaning_ja": null
+      "meaning_ja": "外観；見せかけ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1846,
       "word": "limb",
-      "meaning_ja": null
+      "meaning_ja": "手足；大枝",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1847,
       "word": "compliance",
-      "meaning_ja": null
+      "meaning_ja": "遵守",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1848,
       "word": "influx",
-      "meaning_ja": null
+      "meaning_ja": "流入",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1849,
       "word": "tantrum",
-      "meaning_ja": null
+      "meaning_ja": "かんしゃく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1850,
       "word": "harbinger",
-      "meaning_ja": null
+      "meaning_ja": "前触れ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1851,
       "word": "avarice",
-      "meaning_ja": null
+      "meaning_ja": "強欲",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1852,
       "word": "ailment",
-      "meaning_ja": null
+      "meaning_ja": "軽い病気",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1853,
       "word": "contraband",
-      "meaning_ja": null
+      "meaning_ja": "密輸品；禁制品",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1854,
       "word": "surveillance",
-      "meaning_ja": null
+      "meaning_ja": "監視",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1855,
       "word": "lineage",
-      "meaning_ja": null
+      "meaning_ja": "血統",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1856,
       "word": "semblance",
-      "meaning_ja": null
+      "meaning_ja": "外見；見せかけ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1857,
       "word": "anonymity",
-      "meaning_ja": null
+      "meaning_ja": "匿名性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1858,
       "word": "gimmick",
-      "meaning_ja": null
+      "meaning_ja": "人目を引く仕掛け",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1859,
       "word": "paragon",
-      "meaning_ja": null
+      "meaning_ja": "模範",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1860,
       "word": "demeanor",
-      "meaning_ja": null
+      "meaning_ja": "振る舞い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1861,
       "word": "apathy",
-      "meaning_ja": null
+      "meaning_ja": "無関心",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1862,
       "word": "discrepancy",
-      "meaning_ja": null
+      "meaning_ja": "不一致",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1863,
       "word": "anecdote",
-      "meaning_ja": null
+      "meaning_ja": "逸話",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1864,
       "word": "jurisdiction",
-      "meaning_ja": null
+      "meaning_ja": "管轄権",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1865,
       "word": "loophole",
-      "meaning_ja": null
+      "meaning_ja": "抜け穴",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1866,
       "word": "malady",
-      "meaning_ja": null
+      "meaning_ja": "病気；社会の弊害",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1867,
       "word": "bounty",
-      "meaning_ja": null
+      "meaning_ja": "報奨金；豊富な恵み",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1868,
       "word": "beneficiary",
-      "meaning_ja": null
+      "meaning_ja": "受益者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1869,
       "word": "abolition",
-      "meaning_ja": null
+      "meaning_ja": "廃止",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1870,
       "word": "chivalry",
-      "meaning_ja": null
+      "meaning_ja": "騎士道；礼儀正しさ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1871,
       "word": "provocative",
-      "meaning_ja": null
+      "meaning_ja": "挑発的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1872,
       "word": "affluent",
-      "meaning_ja": null
+      "meaning_ja": "裕福な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1873,
       "word": "categorical",
-      "meaning_ja": null
+      "meaning_ja": "断定的な；明確な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1874,
       "word": "homogeneous",
-      "meaning_ja": null
+      "meaning_ja": "均質な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1875,
       "word": "divine",
-      "meaning_ja": null
+      "meaning_ja": "神の；推測する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1876,
       "word": "lenient",
-      "meaning_ja": null
+      "meaning_ja": "寛大な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1877,
       "word": "anemic",
-      "meaning_ja": null
+      "meaning_ja": "貧血の；活力のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1878,
       "word": "gaudy",
-      "meaning_ja": null
+      "meaning_ja": "けばけばしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1879,
       "word": "succulent",
-      "meaning_ja": null
+      "meaning_ja": "多汁でおいしい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1880,
       "word": "obsequious",
-      "meaning_ja": null
+      "meaning_ja": "こびへつらう",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1881,
       "word": "submissive",
-      "meaning_ja": null
+      "meaning_ja": "従順な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1882,
       "word": "urbane",
-      "meaning_ja": null
+      "meaning_ja": "洗練された",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1883,
       "word": "bleak",
-      "meaning_ja": null
+      "meaning_ja": "荒涼とした；見通しの暗い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1884,
       "word": "insidious",
-      "meaning_ja": null
+      "meaning_ja": "知らぬ間に害を及ぼす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1885,
       "word": "malignant",
-      "meaning_ja": null
+      "meaning_ja": "悪性の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1886,
       "word": "elastic",
-      "meaning_ja": null
+      "meaning_ja": "弾力のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1887,
       "word": "prone",
-      "meaning_ja": null
+      "meaning_ja": "しがちな；うつぶせの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1888,
       "word": "inclement",
-      "meaning_ja": null
+      "meaning_ja": "天候が荒れた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1889,
       "word": "consummate",
-      "meaning_ja": null
+      "meaning_ja": "完璧な；完了させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1890,
       "word": "shrewd",
-      "meaning_ja": null
+      "meaning_ja": "抜け目のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1891,
       "word": "carnivorous",
-      "meaning_ja": null
+      "meaning_ja": "肉食の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1892,
       "word": "intricate",
-      "meaning_ja": null
+      "meaning_ja": "複雑な；精巧な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1893,
       "word": "lax",
-      "meaning_ja": null
+      "meaning_ja": "緩い；怠慢な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1894,
       "word": "futile",
-      "meaning_ja": null
+      "meaning_ja": "無益な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1895,
       "word": "ambiguous",
-      "meaning_ja": null
+      "meaning_ja": "曖昧な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1896,
       "word": "charred",
-      "meaning_ja": null
+      "meaning_ja": "黒焦げの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1897,
       "word": "manifest",
-      "meaning_ja": null
+      "meaning_ja": "明白な；表す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1898,
       "word": "vigorous",
-      "meaning_ja": null
+      "meaning_ja": "精力的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1899,
       "word": "bluntly",
-      "meaning_ja": null
+      "meaning_ja": "率直に；ぶっきらぼうに",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1900,
       "word": "concur",
-      "meaning_ja": null
+      "meaning_ja": "同意する；同時に起こる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1901,
       "word": "chafe",
-      "meaning_ja": null
+      "meaning_ja": "こすれて痛む；いら立つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1902,
       "word": "materialize",
-      "meaning_ja": null
+      "meaning_ja": "実現する；現れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1903,
       "word": "loom",
-      "meaning_ja": null
+      "meaning_ja": "不気味に迫る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1904,
       "word": "crunch",
-      "meaning_ja": null
+      "meaning_ja": "かみ砕く；数値を処理する；危機",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1905,
       "word": "prescribe",
-      "meaning_ja": null
+      "meaning_ja": "処方する；規定する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1906,
       "word": "unleash",
-      "meaning_ja": null
+      "meaning_ja": "解き放つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1907,
       "word": "heed",
-      "meaning_ja": null
+      "meaning_ja": "注意を払う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1908,
       "word": "emigrate",
-      "meaning_ja": null
+      "meaning_ja": "国外へ移住する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1909,
       "word": "stray",
-      "meaning_ja": null
+      "meaning_ja": "迷う；はぐれた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1910,
       "word": "discard",
-      "meaning_ja": null
+      "meaning_ja": "捨てる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1911,
       "word": "rhyme",
-      "meaning_ja": null
+      "meaning_ja": "韻；韻を踏む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1912,
       "word": "quip",
-      "meaning_ja": null
+      "meaning_ja": "気の利いた冗談を言う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1913,
       "word": "bully",
-      "meaning_ja": null
+      "meaning_ja": "いじめる；いじめっ子",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1914,
       "word": "elongate",
-      "meaning_ja": null
+      "meaning_ja": "長くする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1915,
       "word": "snatch",
-      "meaning_ja": null
+      "meaning_ja": "ひったくる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1916,
       "word": "obstruct",
-      "meaning_ja": null
+      "meaning_ja": "妨げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1917,
       "word": "erupt",
-      "meaning_ja": null
+      "meaning_ja": "噴火する；勃発する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1918,
       "word": "chronicle",
-      "meaning_ja": null
+      "meaning_ja": "年代記；記録する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1919,
       "word": "consolidate",
-      "meaning_ja": null
+      "meaning_ja": "統合する；強化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1920,
       "word": "reap",
-      "meaning_ja": null
+      "meaning_ja": "刈り取る；利益を得る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1921,
       "word": "penalize",
-      "meaning_ja": null
+      "meaning_ja": "罰する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1922,
       "word": "loot",
-      "meaning_ja": null
+      "meaning_ja": "略奪する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1923,
       "word": "animate",
-      "meaning_ja": null
+      "meaning_ja": "活気付ける；動きを与える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1924,
       "word": "beset",
-      "meaning_ja": null
+      "meaning_ja": "苦しめる；取り囲む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1925,
       "word": "sprawl",
-      "meaning_ja": null
+      "meaning_ja": "広がる；手足を伸ばす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1926,
       "word": "assimilate",
-      "meaning_ja": null
+      "meaning_ja": "同化する；吸収する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1927,
       "word": "agitate",
-      "meaning_ja": null
+      "meaning_ja": "動揺させる；扇動する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1928,
       "word": "dismay",
-      "meaning_ja": null
+      "meaning_ja": "落胆；狼狽させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1929,
       "word": "cling",
-      "meaning_ja": null
+      "meaning_ja": "しがみつく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1930,
       "word": "surpass",
-      "meaning_ja": null
+      "meaning_ja": "上回る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1931,
       "word": "deplete",
-      "meaning_ja": null
+      "meaning_ja": "使い果たす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1932,
       "word": "default",
-      "meaning_ja": null
+      "meaning_ja": "債務不履行；初期設定",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1933,
       "word": "metabolize",
-      "meaning_ja": null
+      "meaning_ja": "代謝する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1934,
       "word": "pendulum",
-      "meaning_ja": null
+      "meaning_ja": "振り子",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1935,
       "word": "burial",
-      "meaning_ja": null
+      "meaning_ja": "埋葬",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1936,
       "word": "stronghold",
-      "meaning_ja": null
+      "meaning_ja": "とりで；本拠地",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1937,
       "word": "pawn",
-      "meaning_ja": null
+      "meaning_ja": "手先；質に入れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1938,
       "word": "logistics",
-      "meaning_ja": null
+      "meaning_ja": "物流；実行の段取り",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1939,
       "word": "milestone",
-      "meaning_ja": null
+      "meaning_ja": "画期的な出来事",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1940,
       "word": "paranoia",
-      "meaning_ja": null
+      "meaning_ja": "妄想症；強い被害意識",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1941,
       "word": "ration",
-      "meaning_ja": null
+      "meaning_ja": "配給；配給する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1942,
       "word": "bribery",
-      "meaning_ja": null
+      "meaning_ja": "贈収賄",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1943,
       "word": "subsistence",
-      "meaning_ja": null
+      "meaning_ja": "生存；最低限の生活",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1944,
       "word": "heritage",
-      "meaning_ja": null
+      "meaning_ja": "遺産",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1945,
       "word": "defect",
-      "meaning_ja": null
+      "meaning_ja": "欠陥；離反する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1946,
       "word": "vacancy",
-      "meaning_ja": null
+      "meaning_ja": "空き；欠員",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1947,
       "word": "standstill",
-      "meaning_ja": null
+      "meaning_ja": "停止状態",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1948,
       "word": "constituent",
-      "meaning_ja": null
+      "meaning_ja": "構成要素；有権者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1949,
       "word": "discord",
-      "meaning_ja": null
+      "meaning_ja": "不和",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1950,
       "word": "academia",
-      "meaning_ja": null
+      "meaning_ja": "学界",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1951,
       "word": "reptile",
-      "meaning_ja": null
+      "meaning_ja": "爬虫類",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1952,
       "word": "brink",
-      "meaning_ja": null
+      "meaning_ja": "瀬戸際",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1953,
       "word": "pollutant",
-      "meaning_ja": null
+      "meaning_ja": "汚染物質",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1954,
       "word": "tariff",
-      "meaning_ja": null
+      "meaning_ja": "関税",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1955,
       "word": "verge",
-      "meaning_ja": null
+      "meaning_ja": "瀬戸際；境界",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1956,
       "word": "footage",
-      "meaning_ja": null
+      "meaning_ja": "映像",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1957,
       "word": "recourse",
-      "meaning_ja": null
+      "meaning_ja": "頼る手段",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1958,
       "word": "fabric",
-      "meaning_ja": null
+      "meaning_ja": "織物；構造",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1959,
       "word": "cunning",
-      "meaning_ja": null
+      "meaning_ja": "ずる賢さ；巧妙な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1960,
       "word": "electrode",
-      "meaning_ja": null
+      "meaning_ja": "電極",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1961,
       "word": "dice",
-      "meaning_ja": null
+      "meaning_ja": "サイコロ；さいの目に切る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1962,
       "word": "durability",
-      "meaning_ja": null
+      "meaning_ja": "耐久性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1963,
       "word": "amphibian",
-      "meaning_ja": null
+      "meaning_ja": "両生類",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1964,
       "word": "clutter",
-      "meaning_ja": null
+      "meaning_ja": "散らかった物；散らかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1965,
       "word": "blast",
-      "meaning_ja": null
+      "meaning_ja": "爆発；突風",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1966,
       "word": "coffer",
-      "meaning_ja": null
+      "meaning_ja": "金庫；資金",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1967,
       "word": "hubris",
-      "meaning_ja": null
+      "meaning_ja": "傲慢",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1968,
       "word": "arrogance",
-      "meaning_ja": null
+      "meaning_ja": "横柄さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1969,
       "word": "laureate",
-      "meaning_ja": null
+      "meaning_ja": "受賞者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1970,
       "word": "transparency",
-      "meaning_ja": null
+      "meaning_ja": "透明性",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1971,
       "word": "hemisphere",
-      "meaning_ja": null
+      "meaning_ja": "半球",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1972,
       "word": "watershed",
-      "meaning_ja": null
+      "meaning_ja": "分水嶺；転機",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1973,
       "word": "supervision",
-      "meaning_ja": null
+      "meaning_ja": "監督",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1974,
       "word": "adolescent",
-      "meaning_ja": null
+      "meaning_ja": "思春期の；若者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1975,
       "word": "naive",
-      "meaning_ja": null
+      "meaning_ja": "世間知らずの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1976,
       "word": "hefty",
-      "meaning_ja": null
+      "meaning_ja": "重い；多額の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1977,
       "word": "minuscule",
-      "meaning_ja": null
+      "meaning_ja": "非常に小さい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1978,
       "word": "synonymous",
-      "meaning_ja": null
+      "meaning_ja": "同義の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1979,
       "word": "reputable",
-      "meaning_ja": null
+      "meaning_ja": "評判のよい",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1980,
       "word": "authoritative",
-      "meaning_ja": null
+      "meaning_ja": "権威のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1981,
       "word": "cardiovascular",
-      "meaning_ja": null
+      "meaning_ja": "心臓血管の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1982,
       "word": "impaired",
-      "meaning_ja": null
+      "meaning_ja": "機能が損なわれた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1983,
       "word": "porous",
-      "meaning_ja": null
+      "meaning_ja": "多孔性の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1984,
       "word": "ingrained",
-      "meaning_ja": null
+      "meaning_ja": "深く染み付いた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1985,
       "word": "inhumane",
-      "meaning_ja": null
+      "meaning_ja": "非人道的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1986,
       "word": "wary",
-      "meaning_ja": null
+      "meaning_ja": "用心深い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1987,
       "word": "juvenile",
-      "meaning_ja": null
+      "meaning_ja": "少年の；幼稚な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1988,
       "word": "illiterate",
-      "meaning_ja": null
+      "meaning_ja": "読み書きのできない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1989,
       "word": "superficial",
-      "meaning_ja": null
+      "meaning_ja": "表面的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1990,
       "word": "insane",
-      "meaning_ja": null
+      "meaning_ja": "正気でない；非常識な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1991,
       "word": "municipal",
-      "meaning_ja": null
+      "meaning_ja": "市の；自治体の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1992,
       "word": "empirical",
-      "meaning_ja": null
+      "meaning_ja": "経験的な；実証的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1993,
       "word": "sinister",
-      "meaning_ja": null
+      "meaning_ja": "不吉な；邪悪な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1994,
       "word": "upscale",
-      "meaning_ja": null
+      "meaning_ja": "高級な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1995,
       "word": "intimate",
-      "meaning_ja": null
+      "meaning_ja": "親密な；ほのめかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1996,
       "word": "unconventional",
-      "meaning_ja": null
+      "meaning_ja": "型にはまらない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1997,
       "word": "egalitarian",
-      "meaning_ja": null
+      "meaning_ja": "平等主義の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1998,
       "word": "extravagant",
-      "meaning_ja": null
+      "meaning_ja": "浪費的な；過度の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 1999,
       "word": "invaluable",
-      "meaning_ja": null
+      "meaning_ja": "非常に貴重な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2000,
       "word": "strut",
-      "meaning_ja": null
+      "meaning_ja": "気取って歩く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2001,
       "word": "stun",
-      "meaning_ja": null
+      "meaning_ja": "気絶させる；驚かせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2002,
       "word": "fabricate",
-      "meaning_ja": null
+      "meaning_ja": "でっち上げる；製造する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2003,
       "word": "spawn",
-      "meaning_ja": null
+      "meaning_ja": "生み出す；産卵する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2004,
       "word": "endorse",
-      "meaning_ja": null
+      "meaning_ja": "支持する；裏書きする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2005,
       "word": "infuriate",
-      "meaning_ja": null
+      "meaning_ja": "激怒させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2006,
       "word": "contemplate",
-      "meaning_ja": null
+      "meaning_ja": "熟考する；じっと見る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2007,
       "word": "linger",
-      "meaning_ja": null
+      "meaning_ja": "長居する；残り続ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2008,
       "word": "mediate",
-      "meaning_ja": null
+      "meaning_ja": "仲裁する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2009,
       "word": "reconcile",
-      "meaning_ja": null
+      "meaning_ja": "和解させる；両立させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2010,
       "word": "applaud",
-      "meaning_ja": null
+      "meaning_ja": "拍手する；称賛する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2011,
       "word": "efface",
-      "meaning_ja": null
+      "meaning_ja": "消す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2012,
       "word": "conflate",
-      "meaning_ja": null
+      "meaning_ja": "混同する；融合する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2013,
       "word": "pit",
-      "meaning_ja": null
+      "meaning_ja": "対抗させる；穴",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2014,
       "word": "reclaim",
-      "meaning_ja": null
+      "meaning_ja": "取り戻す；埋め立てる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2015,
       "word": "precipitate",
-      "meaning_ja": null
+      "meaning_ja": "引き起こす；沈殿する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2016,
       "word": "envisage",
-      "meaning_ja": null
+      "meaning_ja": "思い描く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2017,
       "word": "shroud",
-      "meaning_ja": null
+      "meaning_ja": "覆い隠す；覆い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2018,
       "word": "abstain",
-      "meaning_ja": null
+      "meaning_ja": "控える；棄権する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2019,
       "word": "reimburse",
-      "meaning_ja": null
+      "meaning_ja": "払い戻す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2020,
       "word": "expire",
-      "meaning_ja": null
+      "meaning_ja": "期限が切れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2021,
       "word": "subside",
-      "meaning_ja": null
+      "meaning_ja": "静まる；沈下する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2022,
       "word": "interrogate",
-      "meaning_ja": null
+      "meaning_ja": "尋問する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2023,
       "word": "flunk",
-      "meaning_ja": null
+      "meaning_ja": "試験に落ちる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2024,
       "word": "recoil",
-      "meaning_ja": null
+      "meaning_ja": "後ずさりする；反動で動く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2025,
       "word": "commemorate",
-      "meaning_ja": null
+      "meaning_ja": "記念する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2026,
       "word": "dissolution",
-      "meaning_ja": null
+      "meaning_ja": "解散；溶解",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2027,
       "word": "portent",
-      "meaning_ja": null
+      "meaning_ja": "前兆",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2028,
       "word": "paralysis",
-      "meaning_ja": null
+      "meaning_ja": "麻痺",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2029,
       "word": "arsenal",
-      "meaning_ja": null
+      "meaning_ja": "兵器庫；蓄え",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2030,
       "word": "backdrop",
-      "meaning_ja": null
+      "meaning_ja": "背景",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2031,
       "word": "perimeter",
-      "meaning_ja": null
+      "meaning_ja": "周囲；周辺の長さ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2032,
       "word": "ordeal",
-      "meaning_ja": null
+      "meaning_ja": "厳しい試練",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2033,
       "word": "peril",
-      "meaning_ja": null
+      "meaning_ja": "危険",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2034,
       "word": "diameter",
-      "meaning_ja": null
+      "meaning_ja": "直径",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2035,
       "word": "discharge",
-      "meaning_ja": null
+      "meaning_ja": "放出する；退院させる；解雇する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2036,
       "word": "amenity",
-      "meaning_ja": null
+      "meaning_ja": "快適な設備",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2037,
       "word": "naturalization",
-      "meaning_ja": null
+      "meaning_ja": "帰化",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2038,
       "word": "artery",
-      "meaning_ja": null
+      "meaning_ja": "動脈；主要幹線",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2039,
       "word": "overture",
-      "meaning_ja": null
+      "meaning_ja": "序曲；打診",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2040,
       "word": "mishap",
-      "meaning_ja": null
+      "meaning_ja": "不運な事故",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2041,
       "word": "diffusion",
-      "meaning_ja": null
+      "meaning_ja": "拡散",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2042,
       "word": "intake",
-      "meaning_ja": null
+      "meaning_ja": "摂取量；取り入れ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2043,
       "word": "freight",
-      "meaning_ja": null
+      "meaning_ja": "貨物；運賃",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2044,
       "word": "sanctuary",
-      "meaning_ja": null
+      "meaning_ja": "聖域；保護区",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2045,
       "word": "bureaucracy",
-      "meaning_ja": null
+      "meaning_ja": "官僚制度",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2046,
       "word": "compassion",
-      "meaning_ja": null
+      "meaning_ja": "思いやり",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2047,
       "word": "anatomy",
-      "meaning_ja": null
+      "meaning_ja": "解剖学；身体の構造",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2048,
       "word": "fraternity",
-      "meaning_ja": null
+      "meaning_ja": "友愛；学生の親睦団体",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2049,
       "word": "tumor",
-      "meaning_ja": null
+      "meaning_ja": "腫瘍",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2050,
       "word": "dictator",
-      "meaning_ja": null
+      "meaning_ja": "独裁者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2051,
       "word": "outcast",
-      "meaning_ja": null
+      "meaning_ja": "のけ者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2052,
       "word": "adulation",
-      "meaning_ja": null
+      "meaning_ja": "過度の称賛",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2053,
       "word": "bliss",
-      "meaning_ja": null
+      "meaning_ja": "至福",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2054,
       "word": "deprivation",
-      "meaning_ja": null
+      "meaning_ja": "剥奪；欠乏",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2055,
       "word": "cascade",
-      "meaning_ja": null
+      "meaning_ja": "小さな滝；連続して起こるもの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2056,
       "word": "hysteria",
-      "meaning_ja": null
+      "meaning_ja": "異常な興奮；集団的なパニック",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2057,
       "word": "patriot",
-      "meaning_ja": null
+      "meaning_ja": "愛国者",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2058,
       "word": "testimonial",
-      "meaning_ja": null
+      "meaning_ja": "推薦状；証言",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2059,
       "word": "tier",
-      "meaning_ja": null
+      "meaning_ja": "段；階層",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2060,
       "word": "conformity",
-      "meaning_ja": null
+      "meaning_ja": "順応；適合",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2061,
       "word": "tribute",
-      "meaning_ja": null
+      "meaning_ja": "賛辞；貢ぎ物",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2062,
       "word": "decency",
-      "meaning_ja": null
+      "meaning_ja": "礼儀正しさ；良識",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2063,
       "word": "apprehension",
-      "meaning_ja": null
+      "meaning_ja": "不安；逮捕；理解",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2064,
       "word": "dismal",
-      "meaning_ja": null
+      "meaning_ja": "陰鬱な；惨めな",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2065,
       "word": "lunar",
-      "meaning_ja": null
+      "meaning_ja": "月の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2066,
       "word": "simultaneous",
-      "meaning_ja": null
+      "meaning_ja": "同時の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2067,
       "word": "redundant",
-      "meaning_ja": null
+      "meaning_ja": "余分な；人員整理で不要な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2068,
       "word": "idiosyncratic",
-      "meaning_ja": null
+      "meaning_ja": "独特の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2069,
       "word": "overdue",
-      "meaning_ja": null
+      "meaning_ja": "期限を過ぎた",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2070,
       "word": "hospitable",
-      "meaning_ja": null
+      "meaning_ja": "親切にもてなす；住むのに適した",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2071,
       "word": "stern",
-      "meaning_ja": null
+      "meaning_ja": "厳格な；船尾",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2072,
       "word": "airborne",
-      "meaning_ja": null
+      "meaning_ja": "空気で運ばれる；飛行中の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2073,
       "word": "conceivable",
-      "meaning_ja": null
+      "meaning_ja": "考えられる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2074,
       "word": "punitive",
-      "meaning_ja": null
+      "meaning_ja": "懲罰的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2075,
       "word": "respiratory",
-      "meaning_ja": null
+      "meaning_ja": "呼吸の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2076,
       "word": "spacious",
-      "meaning_ja": null
+      "meaning_ja": "広々とした",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2077,
       "word": "sterile",
-      "meaning_ja": null
+      "meaning_ja": "無菌の；不毛な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2078,
       "word": "amicable",
-      "meaning_ja": null
+      "meaning_ja": "友好的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2079,
       "word": "addictive",
-      "meaning_ja": null
+      "meaning_ja": "依存性のある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2080,
       "word": "disposable",
-      "meaning_ja": null
+      "meaning_ja": "使い捨ての；処分可能な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2081,
       "word": "filthy",
-      "meaning_ja": null
+      "meaning_ja": "不潔な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2082,
       "word": "sheer",
-      "meaning_ja": null
+      "meaning_ja": "まったくの；切り立った",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2083,
       "word": "confidential",
-      "meaning_ja": null
+      "meaning_ja": "機密の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2084,
       "word": "edible",
-      "meaning_ja": null
+      "meaning_ja": "食べられる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2085,
       "word": "despicable",
-      "meaning_ja": null
+      "meaning_ja": "卑劣な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2086,
       "word": "predominant",
-      "meaning_ja": null
+      "meaning_ja": "支配的な；最も多い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2087,
       "word": "pretentious",
-      "meaning_ja": null
+      "meaning_ja": "気取った",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2088,
       "word": "static",
-      "meaning_ja": null
+      "meaning_ja": "静止した；変化のない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2089,
       "word": "discreet",
-      "meaning_ja": null
+      "meaning_ja": "慎重な；口の堅い",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2090,
       "word": "impregnable",
-      "meaning_ja": null
+      "meaning_ja": "難攻不落の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2091,
       "word": "obligatory",
-      "meaning_ja": null
+      "meaning_ja": "義務的な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2092,
       "word": "ominous",
-      "meaning_ja": null
+      "meaning_ja": "不吉な",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2093,
       "word": "torrential",
-      "meaning_ja": null
+      "meaning_ja": "土砂降りの",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2094,
       "word": "ailing",
-      "meaning_ja": null
+      "meaning_ja": "病気の；不振の",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2095,
       "word": "squarely",
-      "meaning_ja": null
+      "meaning_ja": "正面から；真っ向から",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2096,
       "word": "indefinitely",
-      "meaning_ja": null
+      "meaning_ja": "無期限に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2097,
       "word": "figuratively",
-      "meaning_ja": null
+      "meaning_ja": "比喩的に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2098,
       "word": "belatedly",
-      "meaning_ja": null
+      "meaning_ja": "遅れて",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2099,
       "word": "incidentally",
-      "meaning_ja": null
+      "meaning_ja": "ちなみに；偶然に",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2100,
       "word": "crack down on",
-      "meaning_ja": null
+      "meaning_ja": "厳しく取り締まる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2101,
       "word": "boil down to",
-      "meaning_ja": null
+      "meaning_ja": "結局～ということになる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2102,
       "word": "reinin",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2103,
       "word": "vouch for",
-      "meaning_ja": null
+      "meaning_ja": "保証する；正しいと証言する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2104,
       "word": "beef up",
-      "meaning_ja": null
+      "meaning_ja": "強化する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2105,
       "word": "dispense with",
-      "meaning_ja": null
+      "meaning_ja": "なしで済ませる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2106,
       "word": "hinge on",
-      "meaning_ja": null
+      "meaning_ja": "～次第である",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2107,
       "word": "weighin",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2108,
       "word": "actup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2109,
       "word": "bail out",
-      "meaning_ja": null
+      "meaning_ja": "救済する；保釈する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2110,
       "word": "head off",
-      "meaning_ja": null
+      "meaning_ja": "阻止する；先回りする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2111,
       "word": "fend for oneself",
-      "meaning_ja": null
+      "meaning_ja": "自活する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2112,
       "word": "kickin",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2113,
       "word": "pull off",
-      "meaning_ja": null
+      "meaning_ja": "困難なことをやってのける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2114,
       "word": "wind up",
-      "meaning_ja": null
+      "meaning_ja": "結局～になる；終える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2115,
       "word": "weed out",
-      "meaning_ja": null
+      "meaning_ja": "取り除く；淘汰する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2116,
       "word": "rollout",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2117,
       "word": "cashinon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2118,
       "word": "pitchin",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2119,
       "word": "bear out",
-      "meaning_ja": null
+      "meaning_ja": "裏付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2120,
       "word": "zeroinon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2121,
       "word": "factor in",
-      "meaning_ja": null
+      "meaning_ja": "要因として考慮する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2122,
       "word": "take off",
-      "meaning_ja": null
+      "meaning_ja": "離陸する；急に成功する；脱ぐ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2123,
       "word": "iron out",
-      "meaning_ja": null
+      "meaning_ja": "問題などを解消する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2124,
       "word": "churn out",
-      "meaning_ja": null
+      "meaning_ja": "大量に作り出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2125,
       "word": "shrug off",
-      "meaning_ja": null
+      "meaning_ja": "気にせずに受け流す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2126,
       "word": "level off",
-      "meaning_ja": null
+      "meaning_ja": "横ばいになる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2127,
       "word": "shy away from",
-      "meaning_ja": null
+      "meaning_ja": "～を避ける；尻込みする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2128,
       "word": "side with a",
-      "meaning_ja": null
+      "meaning_ja": "Aの味方をする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2129,
       "word": "stirup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2130,
       "word": "pass down",
-      "meaning_ja": null
+      "meaning_ja": "後世に伝える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2131,
       "word": "getbackata",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2132,
       "word": "follow through",
-      "meaning_ja": null
+      "meaning_ja": "最後までやり遂げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2133,
       "word": "ward off",
-      "meaning_ja": null
+      "meaning_ja": "防ぐ；かわす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2134,
       "word": "dive into",
-      "meaning_ja": null
+      "meaning_ja": "飛び込む；熱心に取り組む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2135,
       "word": "lag behind",
-      "meaning_ja": null
+      "meaning_ja": "遅れを取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2136,
       "word": "hold a",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2137,
       "word": "turnto",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2138,
       "word": "wipe out",
-      "meaning_ja": null
+      "meaning_ja": "一掃する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2139,
       "word": "tear down",
-      "meaning_ja": null
+      "meaning_ja": "取り壊す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2140,
       "word": "stick around",
-      "meaning_ja": null
+      "meaning_ja": "近くにとどまる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2141,
       "word": "wear off",
-      "meaning_ja": null
+      "meaning_ja": "効果が薄れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2142,
       "word": "abide by",
-      "meaning_ja": null
+      "meaning_ja": "規則などを守る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2143,
       "word": "attribute a tob",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2144,
       "word": "draga into b",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2145,
       "word": "tapinto",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2146,
       "word": "mull over",
-      "meaning_ja": null
+      "meaning_ja": "じっくり考える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2147,
       "word": "buckle down",
-      "meaning_ja": null
+      "meaning_ja": "本腰を入れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2148,
       "word": "live down",
-      "meaning_ja": null
+      "meaning_ja": "失敗などを忘れてもらう",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2149,
       "word": "crop up",
-      "meaning_ja": null
+      "meaning_ja": "突然現れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2150,
       "word": "shell out",
-      "meaning_ja": null
+      "meaning_ja": "大金をしぶしぶ払う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2151,
       "word": "drift off",
-      "meaning_ja": null
+      "meaning_ja": "眠り込む；漂って離れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2152,
       "word": "bow out",
-      "meaning_ja": null
+      "meaning_ja": "身を引く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2153,
       "word": "rifle through",
-      "meaning_ja": null
+      "meaning_ja": "くまなく探す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2154,
       "word": "tip off",
-      "meaning_ja": null
+      "meaning_ja": "情報をそっと教える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2155,
       "word": "fend off",
-      "meaning_ja": null
+      "meaning_ja": "撃退する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2156,
       "word": "dawnona",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2157,
       "word": "putin for",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2158,
       "word": "doteona",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2159,
       "word": "tamper with",
-      "meaning_ja": null
+      "meaning_ja": "勝手にいじる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2160,
       "word": "bankon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2161,
       "word": "drown out",
-      "meaning_ja": null
+      "meaning_ja": "音をかき消す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2162,
       "word": "eggon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2163,
       "word": "blow away",
-      "meaning_ja": null
+      "meaning_ja": "吹き飛ばす；圧倒する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2164,
       "word": "ruboffona",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2165,
       "word": "scrape by",
-      "meaning_ja": null
+      "meaning_ja": "どうにか生活する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2166,
       "word": "goata",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2167,
       "word": "hail from",
-      "meaning_ja": null
+      "meaning_ja": "～の出身である",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2168,
       "word": "buttin",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2169,
       "word": "butter up",
-      "meaning_ja": null
+      "meaning_ja": "おだてる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2170,
       "word": "doup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2171,
       "word": "level with a",
-      "meaning_ja": null
+      "meaning_ja": "Aに率直に話す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2172,
       "word": "clamup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2173,
       "word": "pine for",
-      "meaning_ja": null
+      "meaning_ja": "恋しく思う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2174,
       "word": "panout",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2175,
       "word": "lash out",
-      "meaning_ja": null
+      "meaning_ja": "激しく非難する；殴りかかる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2176,
       "word": "palm off",
-      "meaning_ja": null
+      "meaning_ja": "厄介なものを押し付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2177,
       "word": "smooth over",
-      "meaning_ja": null
+      "meaning_ja": "問題を穏便に収める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2178,
       "word": "chime in",
-      "meaning_ja": null
+      "meaning_ja": "話に加わる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2179,
       "word": "harpon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2180,
       "word": "whip up",
-      "meaning_ja": null
+      "meaning_ja": "急いで作る；感情を煽る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2181,
       "word": "peter out",
-      "meaning_ja": null
+      "meaning_ja": "次第に消える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2182,
       "word": "reel off",
-      "meaning_ja": null
+      "meaning_ja": "すらすら述べる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2183,
       "word": "eke out",
-      "meaning_ja": null
+      "meaning_ja": "何とか生計を立てる；補う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2184,
       "word": "rattle off",
-      "meaning_ja": null
+      "meaning_ja": "すらすら列挙する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2185,
       "word": "chip away at",
-      "meaning_ja": null
+      "meaning_ja": "少しずつ削る；弱める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2186,
       "word": "wriggle out of",
-      "meaning_ja": null
+      "meaning_ja": "巧みに逃れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2187,
       "word": "make off with",
-      "meaning_ja": null
+      "meaning_ja": "持ち逃げする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2188,
       "word": "fire away",
-      "meaning_ja": null
+      "meaning_ja": "遠慮なく質問する；撃ち始める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2189,
       "word": "bear down on",
-      "meaning_ja": null
+      "meaning_ja": "～に迫る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2190,
       "word": "breeze in",
-      "meaning_ja": null
+      "meaning_ja": "気軽に入ってくる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2191,
       "word": "fanout",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2192,
       "word": "cast off",
-      "meaning_ja": null
+      "meaning_ja": "捨て去る；綱を解いて出発する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2193,
       "word": "polish off",
-      "meaning_ja": null
+      "meaning_ja": "平らげる；さっさと片付ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2194,
       "word": "scoot over",
-      "meaning_ja": null
+      "meaning_ja": "席を詰める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2195,
       "word": "ownupto",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2196,
       "word": "shake off",
-      "meaning_ja": null
+      "meaning_ja": "振り払う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2197,
       "word": "fizzle out",
-      "meaning_ja": null
+      "meaning_ja": "尻すぼみに終わる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2198,
       "word": "patch up",
-      "meaning_ja": null
+      "meaning_ja": "修復する；仲直りする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2199,
       "word": "descend on",
-      "meaning_ja": null
+      "meaning_ja": "押しかける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2200,
       "word": "sound off",
-      "meaning_ja": null
+      "meaning_ja": "大声で意見を述べる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2201,
       "word": "leap out at a",
-      "meaning_ja": null
+      "meaning_ja": "Aの目に飛び込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2202,
       "word": "fall through",
-      "meaning_ja": null
+      "meaning_ja": "計画などが駄目になる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2203,
       "word": "gangupona",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2204,
       "word": "bowl over",
-      "meaning_ja": null
+      "meaning_ja": "驚かせる；なぎ倒す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2205,
       "word": "copout",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2206,
       "word": "trail off",
-      "meaning_ja": null
+      "meaning_ja": "声などが次第に消える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2207,
       "word": "hold out for",
-      "meaning_ja": null
+      "meaning_ja": "条件を譲らず待つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2208,
       "word": "rip off",
-      "meaning_ja": null
+      "meaning_ja": "だまし取る；法外な料金を取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2209,
       "word": "farm out",
-      "meaning_ja": null
+      "meaning_ja": "外注する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2210,
       "word": "be bogged down",
-      "meaning_ja": null
+      "meaning_ja": "行き詰まる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2211,
       "word": "fritter away",
-      "meaning_ja": null
+      "meaning_ja": "浪費する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2212,
       "word": "goof off",
-      "meaning_ja": null
+      "meaning_ja": "怠ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2213,
       "word": "dwellon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2214,
       "word": "poke around",
-      "meaning_ja": null
+      "meaning_ja": "あちこち探る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2215,
       "word": "pick off",
-      "meaning_ja": null
+      "meaning_ja": "一人ずつ狙い撃ちする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2216,
       "word": "smack of",
-      "meaning_ja": null
+      "meaning_ja": "～の気味がある",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2217,
       "word": "settle on",
-      "meaning_ja": null
+      "meaning_ja": "決める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2218,
       "word": "sound out",
-      "meaning_ja": null
+      "meaning_ja": "意向を探る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2219,
       "word": "boil over",
-      "meaning_ja": null
+      "meaning_ja": "沸騰してあふれる；感情が爆発する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2220,
       "word": "dish out",
-      "meaning_ja": null
+      "meaning_ja": "料理を盛る；与える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2221,
       "word": "crank out",
-      "meaning_ja": null
+      "meaning_ja": "大量に作る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2222,
       "word": "simmer down",
-      "meaning_ja": null
+      "meaning_ja": "落ち着く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2223,
       "word": "taper off",
-      "meaning_ja": null
+      "meaning_ja": "次第に減る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2224,
       "word": "piece together",
-      "meaning_ja": null
+      "meaning_ja": "つなぎ合わせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2225,
       "word": "rail against",
-      "meaning_ja": null
+      "meaning_ja": "激しく非難する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2226,
       "word": "snap out of",
-      "meaning_ja": null
+      "meaning_ja": "気分などから立ち直る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2227,
       "word": "jockey for",
-      "meaning_ja": null
+      "meaning_ja": "～を得ようと競う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2228,
       "word": "louse up",
-      "meaning_ja": null
+      "meaning_ja": "台無しにする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2229,
       "word": "blot out",
-      "meaning_ja": null
+      "meaning_ja": "覆い隠す；記憶を消す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2230,
       "word": "hunker down",
-      "meaning_ja": null
+      "meaning_ja": "身をかがめる；腰を据える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2231,
       "word": "swear by",
-      "meaning_ja": null
+      "meaning_ja": "絶大な信頼を寄せる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2232,
       "word": "carveup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2233,
       "word": "chew out",
-      "meaning_ja": null
+      "meaning_ja": "厳しく叱る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2234,
       "word": "be decked out",
-      "meaning_ja": null
+      "meaning_ja": "着飾っている；飾り付けられている",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2235,
       "word": "dole out",
-      "meaning_ja": null
+      "meaning_ja": "少しずつ分配する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2236,
       "word": "snap up",
-      "meaning_ja": null
+      "meaning_ja": "すぐに買う；機会をつかむ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2237,
       "word": "wolf down",
-      "meaning_ja": null
+      "meaning_ja": "がつがつ食べる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2238,
       "word": "write off",
-      "meaning_ja": null
+      "meaning_ja": "見限る；帳消しにする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2239,
       "word": "bawl out",
-      "meaning_ja": null
+      "meaning_ja": "大声で叱る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2240,
       "word": "bottle up",
-      "meaning_ja": null
+      "meaning_ja": "感情を抑え込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2241,
       "word": "barge through",
-      "meaning_ja": null
+      "meaning_ja": "強引に押し通る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2242,
       "word": "fork out",
-      "meaning_ja": null
+      "meaning_ja": "しぶしぶ支払う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2243,
       "word": "runup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2244,
       "word": "levela atb",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2245,
       "word": "diginto",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2246,
       "word": "come infor",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2247,
       "word": "coast along",
-      "meaning_ja": null
+      "meaning_ja": "楽にやっていく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2248,
       "word": "wind down",
-      "meaning_ja": null
+      "meaning_ja": "徐々に終える；くつろぐ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2249,
       "word": "frownon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2250,
       "word": "kick around",
-      "meaning_ja": null
+      "meaning_ja": "案を検討する；ぶらぶら過ごす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2251,
       "word": "rollin",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2252,
       "word": "easeup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2253,
       "word": "ride out",
-      "meaning_ja": null
+      "meaning_ja": "嵐や困難を乗り切る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2254,
       "word": "choke off",
-      "meaning_ja": null
+      "meaning_ja": "阻止する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2255,
       "word": "pilein",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2256,
       "word": "strike on",
-      "meaning_ja": null
+      "meaning_ja": "思い付く；見つける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2257,
       "word": "tide over",
-      "meaning_ja": null
+      "meaning_ja": "困難な時期をしのがせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2258,
       "word": "bargain for",
-      "meaning_ja": null
+      "meaning_ja": "予期する；当てにする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2259,
       "word": "beput upon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2260,
       "word": "nose around",
-      "meaning_ja": null
+      "meaning_ja": "かぎ回る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2261,
       "word": "put across",
-      "meaning_ja": null
+      "meaning_ja": "考えを伝える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2262,
       "word": "play along",
-      "meaning_ja": null
+      "meaning_ja": "調子を合わせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2263,
       "word": "limber up",
-      "meaning_ja": null
+      "meaning_ja": "準備運動をする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2264,
       "word": "wash over a",
-      "meaning_ja": null
+      "meaning_ja": "感情などがAを襲う；Aに影響を与えず通り過ぎる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2265,
       "word": "dip into",
-      "meaning_ja": null
+      "meaning_ja": "少し使う；拾い読みする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2266,
       "word": "bekeyed up",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2267,
       "word": "buy off",
-      "meaning_ja": null
+      "meaning_ja": "買収する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2268,
       "word": "settle up",
-      "meaning_ja": null
+      "meaning_ja": "勘定を清算する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2269,
       "word": "growona",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2270,
       "word": "root out",
-      "meaning_ja": null
+      "meaning_ja": "根絶する；探し出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2271,
       "word": "squeak by",
-      "meaning_ja": null
+      "meaning_ja": "ぎりぎりで切り抜ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2272,
       "word": "come around",
-      "meaning_ja": null
+      "meaning_ja": "意見を変える；意識を取り戻す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2273,
       "word": "flesh out",
-      "meaning_ja": null
+      "meaning_ja": "具体的な内容を加える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2274,
       "word": "ropea intob",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2275,
       "word": "fallin with a",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2276,
       "word": "comedownona",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2277,
       "word": "throw out",
-      "meaning_ja": null
+      "meaning_ja": "捨てる；却下する；追い出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2278,
       "word": "horse around",
-      "meaning_ja": null
+      "meaning_ja": "ばか騒ぎする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2279,
       "word": "leton",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2280,
       "word": "rack up",
-      "meaning_ja": null
+      "meaning_ja": "得点などを積み上げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2281,
       "word": "stumble upon",
-      "meaning_ja": null
+      "meaning_ja": "偶然見つける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2282,
       "word": "mill about",
-      "meaning_ja": null
+      "meaning_ja": "当てもなくうろつく",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2283,
       "word": "rip through",
-      "meaning_ja": null
+      "meaning_ja": "すごい勢いで通過する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2284,
       "word": "pin down",
-      "meaning_ja": null
+      "meaning_ja": "正確に突き止める；動けなくする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2285,
       "word": "stamp out",
-      "meaning_ja": null
+      "meaning_ja": "根絶する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2286,
       "word": "rally around a",
-      "meaning_ja": null
+      "meaning_ja": "Aを一致して支援する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2287,
       "word": "playup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2288,
       "word": "rustle up",
-      "meaning_ja": null
+      "meaning_ja": "急いで用意する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2289,
       "word": "leanona",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2290,
       "word": "muscle inon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2291,
       "word": "toy withh",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2292,
       "word": "haul off",
-      "meaning_ja": null
+      "meaning_ja": "引きずって連れ去る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2293,
       "word": "passoffa asb",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2294,
       "word": "pluckup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2295,
       "word": "hold down",
-      "meaning_ja": null
+      "meaning_ja": "仕事を維持する；抑える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2296,
       "word": "kick up",
-      "meaning_ja": null
+      "meaning_ja": "騒ぎを起こす；強まる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2297,
       "word": "stake out",
-      "meaning_ja": null
+      "meaning_ja": "張り込む；権利を主張する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2298,
       "word": "hemin",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2299,
       "word": "nail down",
-      "meaning_ja": null
+      "meaning_ja": "確定する；正確に把握する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2300,
       "word": "knuckle down",
-      "meaning_ja": null
+      "meaning_ja": "本腰を入れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2301,
       "word": "tear into",
-      "meaning_ja": null
+      "meaning_ja": "激しく攻撃する；夢中で取りかかる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2302,
       "word": "trump up",
-      "meaning_ja": null
+      "meaning_ja": "でっち上げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2303,
       "word": "scrimpon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2304,
       "word": "nod off",
-      "meaning_ja": null
+      "meaning_ja": "居眠りする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2305,
       "word": "flare up",
-      "meaning_ja": null
+      "meaning_ja": "急に燃え上がる；再燃する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2306,
       "word": "crouch down",
-      "meaning_ja": null
+      "meaning_ja": "身をかがめる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2307,
       "word": "while away",
-      "meaning_ja": null
+      "meaning_ja": "のんびり時を過ごす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2308,
       "word": "crack up",
-      "meaning_ja": null
+      "meaning_ja": "大笑いする；精神的に参る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2309,
       "word": "keel over",
-      "meaning_ja": null
+      "meaning_ja": "突然倒れる；転覆する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2310,
       "word": "drumup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2311,
       "word": "chokeup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2312,
       "word": "cavein",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2313,
       "word": "blurt out",
-      "meaning_ja": null
+      "meaning_ja": "うっかり口走る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2314,
       "word": "trip up",
-      "meaning_ja": null
+      "meaning_ja": "つまずかせる；失敗させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2315,
       "word": "gloss over",
-      "meaning_ja": null
+      "meaning_ja": "不都合なことをごまかす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2316,
       "word": "hole up",
-      "meaning_ja": null
+      "meaning_ja": "隠れる；閉じこもる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2317,
       "word": "leaf through",
-      "meaning_ja": null
+      "meaning_ja": "ぱらぱらめくる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2318,
       "word": "pore over",
-      "meaning_ja": null
+      "meaning_ja": "熟読する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2319,
       "word": "snapata",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2320,
       "word": "rootfor a",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2321,
       "word": "scratch out",
-      "meaning_ja": null
+      "meaning_ja": "苦労して書く；削り取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2322,
       "word": "suckuptoa",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2323,
       "word": "stockupon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2324,
       "word": "dash off",
-      "meaning_ja": null
+      "meaning_ja": "急いで書く；急に出かける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2325,
       "word": "creepupona",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2326,
       "word": "leadupto",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2327,
       "word": "rake in",
-      "meaning_ja": null
+      "meaning_ja": "大金を稼ぐ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2328,
       "word": "gloat over",
-      "meaning_ja": null
+      "meaning_ja": "得意げに喜ぶ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2329,
       "word": "muddle through",
-      "meaning_ja": null
+      "meaning_ja": "何とか切り抜ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2330,
       "word": "chipin",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2331,
       "word": "prya outofb",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2332,
       "word": "swear in",
-      "meaning_ja": null
+      "meaning_ja": "宣誓させて就任させる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2333,
       "word": "clogup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2334,
       "word": "skirt around",
-      "meaning_ja": null
+      "meaning_ja": "問題に触れるのを避ける",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2335,
       "word": "pickupon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2336,
       "word": "ramp up",
-      "meaning_ja": null
+      "meaning_ja": "増強する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2337,
       "word": "reelin",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2338,
       "word": "sift through",
-      "meaning_ja": null
+      "meaning_ja": "丹念に調べる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2339,
       "word": "snuff out",
-      "meaning_ja": null
+      "meaning_ja": "火を消す；命などを奪う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2340,
       "word": "mete out",
-      "meaning_ja": null
+      "meaning_ja": "罰などを与える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2341,
       "word": "standinfor a",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2342,
       "word": "belt out",
-      "meaning_ja": null
+      "meaning_ja": "大声で歌う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2343,
       "word": "waste away",
-      "meaning_ja": null
+      "meaning_ja": "衰弱する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2344,
       "word": "dragon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2345,
       "word": "spruce up",
-      "meaning_ja": null
+      "meaning_ja": "身なりや外観を整える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2346,
       "word": "square up",
-      "meaning_ja": null
+      "meaning_ja": "借金を清算する；対決の構えを取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2347,
       "word": "strike up",
-      "meaning_ja": null
+      "meaning_ja": "会話などを始める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2348,
       "word": "go through with",
-      "meaning_ja": null
+      "meaning_ja": "計画を最後まで実行する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2349,
       "word": "foulup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2350,
       "word": "jot down",
-      "meaning_ja": null
+      "meaning_ja": "書き留める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2351,
       "word": "roll back",
-      "meaning_ja": null
+      "meaning_ja": "元に戻す；縮小する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2352,
       "word": "square off",
-      "meaning_ja": null
+      "meaning_ja": "対決する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2353,
       "word": "play down",
-      "meaning_ja": null
+      "meaning_ja": "重要性を低く見せる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2354,
       "word": "claw back",
-      "meaning_ja": null
+      "meaning_ja": "取り戻す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2355,
       "word": "dabble in",
-      "meaning_ja": null
+      "meaning_ja": "趣味程度に手を出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2356,
       "word": "back out",
-      "meaning_ja": null
+      "meaning_ja": "約束などから手を引く",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2357,
       "word": "knuckle under",
-      "meaning_ja": null
+      "meaning_ja": "屈服する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2358,
       "word": "choke back",
-      "meaning_ja": null
+      "meaning_ja": "涙や感情をこらえる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2359,
       "word": "bridle at",
-      "meaning_ja": null
+      "meaning_ja": "憤慨する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2360,
       "word": "mouth off",
-      "meaning_ja": null
+      "meaning_ja": "生意気なことを言う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2361,
       "word": "chug along",
-      "meaning_ja": null
+      "meaning_ja": "ゆっくり着実に進む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2362,
       "word": "boot out",
-      "meaning_ja": null
+      "meaning_ja": "追い出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2363,
       "word": "plow through",
-      "meaning_ja": null
+      "meaning_ja": "困難を押して進む；読み進める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2364,
       "word": "flick through",
-      "meaning_ja": null
+      "meaning_ja": "ぱらぱらめくる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2365,
       "word": "front for",
-      "meaning_ja": null
+      "meaning_ja": "隠れみのになる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2366,
       "word": "bottom out",
-      "meaning_ja": null
+      "meaning_ja": "底を打つ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2367,
       "word": "wallow in",
-      "meaning_ja": null
+      "meaning_ja": "感情などに浸る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2368,
       "word": "ratchet up",
-      "meaning_ja": null
+      "meaning_ja": "徐々に引き上げる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2369,
       "word": "revel in",
-      "meaning_ja": null
+      "meaning_ja": "大いに楽しむ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2370,
       "word": "tail off",
-      "meaning_ja": null
+      "meaning_ja": "次第に減る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2371,
       "word": "wear down",
-      "meaning_ja": null
+      "meaning_ja": "徐々に弱らせる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2372,
       "word": "gnawat",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2373,
       "word": "caterto",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2374,
       "word": "grateon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2375,
       "word": "head up",
-      "meaning_ja": null
+      "meaning_ja": "率いる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2376,
       "word": "skim off",
-      "meaning_ja": null
+      "meaning_ja": "上澄みを取る；利益をかすめ取る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2377,
       "word": "stave off",
-      "meaning_ja": null
+      "meaning_ja": "防ぐ；食い止める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2378,
       "word": "pass for",
-      "meaning_ja": null
+      "meaning_ja": "～と見なされる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2379,
       "word": "letupon",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2380,
       "word": "storm out of",
-      "meaning_ja": null
+      "meaning_ja": "怒って飛び出す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2381,
       "word": "sitinfor a",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2382,
       "word": "whisk away",
-      "meaning_ja": null
+      "meaning_ja": "さっと連れ去る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2383,
       "word": "spice up",
-      "meaning_ja": null
+      "meaning_ja": "面白みを加える",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2384,
       "word": "zone out",
-      "meaning_ja": null
+      "meaning_ja": "ぼんやりする",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2385,
       "word": "face off",
-      "meaning_ja": null
+      "meaning_ja": "対決する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2386,
       "word": "stoop to",
-      "meaning_ja": null
+      "meaning_ja": "卑劣なことに手を染める",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2387,
       "word": "interfere with",
-      "meaning_ja": null
+      "meaning_ja": "妨げる；干渉する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2388,
       "word": "strike down",
-      "meaning_ja": null
+      "meaning_ja": "無効にする；倒す",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2389,
       "word": "spring up",
-      "meaning_ja": null
+      "meaning_ja": "突然現れる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2390,
       "word": "pass up",
-      "meaning_ja": null
+      "meaning_ja": "機会を見送る",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2391,
       "word": "fall flat",
-      "meaning_ja": null
+      "meaning_ja": "失敗する；受けない",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2392,
       "word": "wreak havoc on",
-      "meaning_ja": null
+      "meaning_ja": "大混乱をもたらす",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2393,
       "word": "propup",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2394,
       "word": "takeitoutona",
-      "meaning_ja": null
+      "meaning_ja": null,
+      "meaning_source": "pending_spelling_review",
+      "meaning_user_edited": false,
+      "translation_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "id": 2395,
       "word": "opt out of",
-      "meaning_ja": null
+      "meaning_ja": "参加しないことを選ぶ",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2396,
       "word": "defer to",
-      "meaning_ja": null
+      "meaning_ja": "判断などを委ねる；従う",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2397,
       "word": "capitalize on",
-      "meaning_ja": null
+      "meaning_ja": "有利に利用する",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2398,
       "word": "creep into",
-      "meaning_ja": null
+      "meaning_ja": "徐々に入り込む",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     },
     {
       "id": 2399,
       "word": "brim over",
-      "meaning_ja": null
+      "meaning_ja": "あふれる",
+      "meaning_source": "assistant_study_gloss",
+      "meaning_user_edited": false
     }
   ],
   "entries": [
@@ -20670,8 +25551,8 @@ try{data={
     {
       "number": 1438,
       "word_id": 1437,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 1439,
@@ -22020,8 +26901,8 @@ try{data={
     {
       "number": 1663,
       "word_id": 1662,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 1664,
@@ -22662,8 +27543,8 @@ try{data={
     {
       "number": 1770,
       "word_id": 1769,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 1771,
@@ -24660,8 +29541,8 @@ try{data={
     {
       "number": 2103,
       "word_id": 2102,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2104,
@@ -24690,14 +29571,14 @@ try{data={
     {
       "number": 2108,
       "word_id": 2107,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2109,
       "word_id": 2108,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2110,
@@ -24720,8 +29601,8 @@ try{data={
     {
       "number": 2113,
       "word_id": 2112,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2114,
@@ -24744,20 +29625,20 @@ try{data={
     {
       "number": 2117,
       "word_id": 2116,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2118,
       "word_id": 2117,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2119,
       "word_id": 2118,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2120,
@@ -24768,8 +29649,8 @@ try{data={
     {
       "number": 2121,
       "word_id": 2120,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2122,
@@ -24822,8 +29703,8 @@ try{data={
     {
       "number": 2130,
       "word_id": 2129,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2131,
@@ -24834,8 +29715,8 @@ try{data={
     {
       "number": 2132,
       "word_id": 2131,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2133,
@@ -24864,14 +29745,14 @@ try{data={
     {
       "number": 2137,
       "word_id": 2136,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2138,
       "word_id": 2137,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2139,
@@ -24906,20 +29787,20 @@ try{data={
     {
       "number": 2144,
       "word_id": 2143,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2145,
       "word_id": 2144,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2146,
       "word_id": 2145,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2147,
@@ -24984,20 +29865,20 @@ try{data={
     {
       "number": 2157,
       "word_id": 2156,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2158,
       "word_id": 2157,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2159,
       "word_id": 2158,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2160,
@@ -25008,8 +29889,8 @@ try{data={
     {
       "number": 2161,
       "word_id": 2160,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2162,
@@ -25020,8 +29901,8 @@ try{data={
     {
       "number": 2163,
       "word_id": 2162,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2164,
@@ -25032,8 +29913,8 @@ try{data={
     {
       "number": 2165,
       "word_id": 2164,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2166,
@@ -25044,8 +29925,8 @@ try{data={
     {
       "number": 2167,
       "word_id": 2166,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2168,
@@ -25056,8 +29937,8 @@ try{data={
     {
       "number": 2169,
       "word_id": 2168,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2170,
@@ -25068,8 +29949,8 @@ try{data={
     {
       "number": 2171,
       "word_id": 2170,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2172,
@@ -25080,8 +29961,8 @@ try{data={
     {
       "number": 2173,
       "word_id": 2172,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2174,
@@ -25092,8 +29973,8 @@ try{data={
     {
       "number": 2175,
       "word_id": 2174,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2176,
@@ -25122,8 +30003,8 @@ try{data={
     {
       "number": 2180,
       "word_id": 2179,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2181,
@@ -25194,8 +30075,8 @@ try{data={
     {
       "number": 2192,
       "word_id": 2191,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2193,
@@ -25218,8 +30099,8 @@ try{data={
     {
       "number": 2196,
       "word_id": 2195,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2197,
@@ -25266,8 +30147,8 @@ try{data={
     {
       "number": 2204,
       "word_id": 2203,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2205,
@@ -25278,8 +30159,8 @@ try{data={
     {
       "number": 2206,
       "word_id": 2205,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2207,
@@ -25326,8 +30207,8 @@ try{data={
     {
       "number": 2214,
       "word_id": 2213,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2215,
@@ -25440,8 +30321,8 @@ try{data={
     {
       "number": 2233,
       "word_id": 2232,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2234,
@@ -25506,26 +30387,26 @@ try{data={
     {
       "number": 2244,
       "word_id": 2243,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2245,
       "word_id": 2244,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2246,
       "word_id": 2245,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2247,
       "word_id": 2246,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2248,
@@ -25542,8 +30423,8 @@ try{data={
     {
       "number": 2250,
       "word_id": 2249,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2251,
@@ -25554,14 +30435,14 @@ try{data={
     {
       "number": 2252,
       "word_id": 2251,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2253,
       "word_id": 2252,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2254,
@@ -25578,8 +30459,8 @@ try{data={
     {
       "number": 2256,
       "word_id": 2255,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2257,
@@ -25602,8 +30483,8 @@ try{data={
     {
       "number": 2260,
       "word_id": 2259,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2261,
@@ -25644,8 +30525,8 @@ try{data={
     {
       "number": 2267,
       "word_id": 2266,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2268,
@@ -25662,8 +30543,8 @@ try{data={
     {
       "number": 2270,
       "word_id": 2269,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2271,
@@ -25692,20 +30573,20 @@ try{data={
     {
       "number": 2275,
       "word_id": 2274,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2276,
       "word_id": 2275,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2277,
       "word_id": 2276,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2278,
@@ -25722,8 +30603,8 @@ try{data={
     {
       "number": 2280,
       "word_id": 2279,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2281,
@@ -25770,8 +30651,8 @@ try{data={
     {
       "number": 2288,
       "word_id": 2287,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2289,
@@ -25782,20 +30663,20 @@ try{data={
     {
       "number": 2290,
       "word_id": 2289,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2291,
       "word_id": 2290,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2292,
       "word_id": 2291,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2293,
@@ -25806,14 +30687,14 @@ try{data={
     {
       "number": 2294,
       "word_id": 2293,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2295,
       "word_id": 2294,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2296,
@@ -25836,8 +30717,8 @@ try{data={
     {
       "number": 2299,
       "word_id": 2298,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2300,
@@ -25866,8 +30747,8 @@ try{data={
     {
       "number": 2304,
       "word_id": 2303,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2305,
@@ -25908,20 +30789,20 @@ try{data={
     {
       "number": 2311,
       "word_id": 2310,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2312,
       "word_id": 2311,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2313,
       "word_id": 2312,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2314,
@@ -25962,14 +30843,14 @@ try{data={
     {
       "number": 2320,
       "word_id": 2319,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2321,
       "word_id": 2320,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2322,
@@ -25980,14 +30861,14 @@ try{data={
     {
       "number": 2323,
       "word_id": 2322,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2324,
       "word_id": 2323,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2325,
@@ -25998,14 +30879,14 @@ try{data={
     {
       "number": 2326,
       "word_id": 2325,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2327,
       "word_id": 2326,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2328,
@@ -26028,14 +30909,14 @@ try{data={
     {
       "number": 2331,
       "word_id": 2330,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2332,
       "word_id": 2331,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2333,
@@ -26046,8 +30927,8 @@ try{data={
     {
       "number": 2334,
       "word_id": 2333,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2335,
@@ -26058,8 +30939,8 @@ try{data={
     {
       "number": 2336,
       "word_id": 2335,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2337,
@@ -26070,8 +30951,8 @@ try{data={
     {
       "number": 2338,
       "word_id": 2337,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2339,
@@ -26094,8 +30975,8 @@ try{data={
     {
       "number": 2342,
       "word_id": 2341,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2343,
@@ -26112,8 +30993,8 @@ try{data={
     {
       "number": 2345,
       "word_id": 2344,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2346,
@@ -26142,8 +31023,8 @@ try{data={
     {
       "number": 2350,
       "word_id": 2349,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2351,
@@ -26280,20 +31161,20 @@ try{data={
     {
       "number": 2373,
       "word_id": 2372,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2374,
       "word_id": 2373,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2375,
       "word_id": 2374,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2376,
@@ -26322,8 +31203,8 @@ try{data={
     {
       "number": 2380,
       "word_id": 2379,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2381,
@@ -26334,8 +31215,8 @@ try{data={
     {
       "number": 2382,
       "word_id": 2381,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2383,
@@ -26406,14 +31287,14 @@ try{data={
     {
       "number": 2394,
       "word_id": 2393,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2395,
       "word_id": 2394,
-      "review_status": "unassessed",
-      "review_note": null
+      "review_status": "needs_review",
+      "review_note": "元CSVの綴り・空白・欠落を原教材で確認してください。推測による訳は付けていません。"
     },
     {
       "number": 2396,
@@ -26445,5 +31326,7 @@ try{data={
       "review_status": "unassessed",
       "review_note": null
     }
-  ]
+  ],
+  "translation_version": "2026-11-03",
+  "translation_description": "一般的な意味に基づく独自の学習用訳。教材掲載訳の転載ではありません。"
 };try{const saved=localStorage.getItem(key);if(saved)applySaved(JSON.parse(saved));}catch{$('save-status').textContent='保存データを読み込めません。元データを表示しています。';}for(const id of ['range','manage-range'])$(id).innerHTML=ranges.map((r,i)=>`<option value="${i}">${r.start}〜${r.end}</option>`).join('');generate();manager();}catch(e){$('error').textContent=e.message;}
