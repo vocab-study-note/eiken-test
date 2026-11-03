@@ -21,3 +21,5 @@ header{padding:22px 16px}h1{font-size:23px;line-height:1.4}main{padding:16px 10p
 }
 
 .weak-row{display:flex;flex-direction:row;align-items:center;gap:8px;font-size:12px;margin:8px 0;font-weight:normal}.weak-row input{margin:0}#weak-list{max-height:300px;overflow:auto}
+
+.word-toggle{border:0;background:transparent;padding:4px 0;text-align:left;font:inherit;color:#007563;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:4px;max-width:100%;overflow-wrap:anywhere}.revealed-meaning{margin-top:8px;padding:8px;background:#edf7f3;border-radius:5px;color:#193837;font-size:13px;line-height:1.6}@media print{.word-toggle{color:inherit;text-decoration:none;min-height:0;padding:0}}
